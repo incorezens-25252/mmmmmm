@@ -351,8 +351,27 @@ export default function DesktopView() {
       // If we have exactly ONE PDF and no other files, use the highly optimized direct native PDF print
       if (processedFiles.length === 1 && processedFiles[0].isPdf) {
         const activeFileObj = processedFiles[0];
-        const printWindow = window.open("", "_blank");
+        
+        // Remove existing print iframe to clean up
+        const existingFrame = document.getElementById("silent-print-frame");
+        if (existingFrame) {
+          existingFrame.remove();
+        }
+
+        const printIframe = document.createElement("iframe");
+        printIframe.id = "silent-print-frame";
+        printIframe.style.position = "fixed";
+        printIframe.style.top = "-10000px";
+        printIframe.style.left = "-10000px";
+        printIframe.style.width = "1024px";
+        printIframe.style.height = "1024px";
+        printIframe.style.zIndex = "-9999";
+        printIframe.style.border = "none";
+        document.body.appendChild(printIframe);
+
+        const printWindow = printIframe.contentWindow;
         if (printWindow) {
+          printWindow.document.open();
           printWindow.document.write(`
             <html>
               <head>
@@ -409,7 +428,25 @@ export default function DesktopView() {
         }
       } else {
         // Multi-file or customized image/PDF template-based printing
-        const printWindow = window.open("", "_blank");
+        
+        // Remove existing print iframe to clean up
+        const existingFrame = document.getElementById("silent-print-frame");
+        if (existingFrame) {
+          existingFrame.remove();
+        }
+
+        const printIframe = document.createElement("iframe");
+        printIframe.id = "silent-print-frame";
+        printIframe.style.position = "fixed";
+        printIframe.style.top = "-10000px";
+        printIframe.style.left = "-10000px";
+        printIframe.style.width = "1024px";
+        printIframe.style.height = "1024px";
+        printIframe.style.zIndex = "-9999";
+        printIframe.style.border = "none";
+        document.body.appendChild(printIframe);
+
+        const printWindow = printIframe.contentWindow;
         if (printWindow) {
           // Generate high-fidelity previews for all documents in the print queue
           const getPrintPageHtml = (fileObj: any, index: number) => {
@@ -498,6 +535,7 @@ export default function DesktopView() {
 
           const pagesHtml = processedFiles.map((f, idx) => getPrintPageHtml(f, idx)).join("\n");
 
+          printWindow.document.open();
           printWindow.document.write(`
             <!DOCTYPE html>
             <html>
