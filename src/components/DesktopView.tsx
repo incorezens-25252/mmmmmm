@@ -21,6 +21,7 @@ import {
   Sparkle,
   Usb,
   ShieldCheck,
+  Image as ImageIcon,
 } from "lucide-react";
 import InteractiveCanvas from "./InteractiveCanvas";
 import { PrintSession, CustomizationSettings } from "../types";
@@ -165,6 +166,8 @@ export default function DesktopView() {
     customPages: "",
   });
 
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
+
   const startLocalStandaloneSession = () => {
     setLoadingSession(true);
     setPrintStatus("idle");
@@ -236,17 +239,23 @@ export default function DesktopView() {
         try {
           const base64Data = reader.result as string;
           const resolvedFileType = localFile.type || (localFile.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+          const estimatedPageCount = resolvedFileType === "application/pdf" ? 3 : 1;
+
+          const fileObj = {
+            filename: localFile.name,
+            fileType: resolvedFileType,
+            fileData: base64Data,
+            pageCount: estimatedPageCount,
+          };
 
           if (session.id === "local-standalone-mode") {
             setSession({
               ...session,
               status: "uploaded",
-              file: {
-                filename: localFile.name,
-                fileType: resolvedFileType,
-                fileData: base64Data,
-              },
+              file: fileObj,
+              files: [fileObj],
             });
+            setSelectedFileIndex(0);
             setPolling(false);
             return;
           }
@@ -256,21 +265,17 @@ export default function DesktopView() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              filename: localFile.name,
-              fileType: resolvedFileType,
-              fileData: base64Data,
+              files: [fileObj],
             }),
           });
           if (res.ok) {
             setSession({
               ...session,
               status: "uploaded",
-              file: {
-                filename: localFile.name,
-                fileType: localFile.type,
-                fileData: base64Data,
-              },
+              file: fileObj,
+              files: [fileObj],
             });
+            setSelectedFileIndex(0);
             setPolling(false);
           }
         } catch (err) {
@@ -306,8 +311,27 @@ export default function DesktopView() {
     setPrintingPhase(`Sending ${settings.copies} ${settings.copies > 1 ? "copies" : "copy"} to physical printing queue...`);
     await new Promise((r) => setTimeout(r, 800));
 
-    // Trigger standard OS print dialog
-    window.print();
+    // Trigger standard OS print dialog or direct iframe print for PDFs
+    const activeFileObj = session.files && session.files.length > 0
+      ? session.files[selectedFileIndex] || session.files[0]
+      : session.file;
+
+    if (activeFileObj && (activeFileObj.fileType === "application/pdf" || activeFileObj.filename.toLowerCase().endsWith(".pdf"))) {
+      const iframe = document.querySelector("iframe[title='PDF Live Preview']") as HTMLIFrameElement;
+      if (iframe) {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (err) {
+          console.error("Direct PDF print failed, falling back to page print:", err);
+          window.print();
+        }
+      } else {
+        window.print();
+      }
+    } else {
+      window.print();
+    }
 
     // Phase 4: Securely erasing files from server memory (Cloud auto-deletion)
     setPrintingPhase("Print job delivered. Erasing source files from Cloud memory automatically...");
@@ -337,13 +361,17 @@ export default function DesktopView() {
   };
 
   const estimatePrice = () => {
-    let rate = 0.35; // base rate per standard paper copy
-    if (settings.merchandiseType === "poster") rate = 4.50;
-    if (settings.merchandiseType === "tshirt") rate = 12.99;
-    if (settings.merchandiseType === "mug") rate = 7.50;
-
-    if (settings.colorMode === "color") rate *= 1.4; // color tax
-    return (rate * settings.copies).toFixed(2);
+    let pages = 0;
+    if (session?.files && session.files.length > 0) {
+      pages = session.files.reduce((sum, f) => sum + (f.pageCount || 1), 0);
+    } else if (session?.file) {
+      pages = session.file.pageCount || 1;
+    } else {
+      pages = 1; // fallback
+    }
+    
+    const rate = settings.colorMode === "color" ? 5 : 3;
+    return pages * rate * settings.copies;
   };
 
   return (
@@ -723,270 +751,290 @@ export default function DesktopView() {
           </div>
         ) : (
           /* STEP 2: FILE RECEIVED, ACTIVE SPECIFICATIONS CUSTOMIZATION */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start my-2">
+          (() => {
+            const filesList = session.files && session.files.length > 0
+              ? session.files
+              : session.file
+              ? [session.file]
+              : [];
             
-            {/* Left Column - Interactive Canvas & Preview */}
-            <div className="lg:col-span-7 flex flex-col gap-4">
-              <InteractiveCanvas
-                filename={session.file.filename}
-                fileType={session.file.fileType}
-                fileData={session.file.fileData}
-                settings={settings}
-                onUpdateSettings={(newSettings) => setSettings(newSettings)}
-              />
-            </div>
+            const activeFile = filesList[selectedFileIndex] || filesList[0] || session.file;
+            const totalPagesCount = filesList.reduce((sum, f) => sum + (f.pageCount || 1), 0);
 
-            {/* Right Column - Sleek Settings Form */}
-            <div className="lg:col-span-5 space-y-6">
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start my-2">
                 
-                {/* Section Header */}
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-4 mb-5">
-                  <Sliders className="w-4 h-4 text-blue-600" />
-                  <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">
-                    Print Specifications
-                  </h3>
+                {/* 1. Left Column - Multi-File Sidebar List (3 cols) */}
+                <div className="lg:col-span-3 space-y-4">
+                  <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                      <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-blue-600" /> Print Queue
+                      </h3>
+                      <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">
+                        {filesList.length} Files
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                      {filesList.map((fileObj, idx) => {
+                        const isPdf = fileObj.fileType === "application/pdf" || fileObj.filename.toLowerCase().endsWith(".pdf");
+                        const isSelected = selectedFileIndex === idx;
+
+                        return (
+                          <button
+                            key={`${fileObj.filename}-${idx}`}
+                            onClick={() => setSelectedFileIndex(idx)}
+                            className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
+                              isSelected
+                                ? "bg-blue-50/70 border-blue-200 ring-1 ring-blue-100"
+                                : "bg-slate-50/50 border-slate-100 hover:border-slate-200"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border ${
+                                isPdf ? "bg-rose-50 border-rose-100 text-rose-500" : "bg-sky-50 border-sky-100 text-sky-500"
+                              }`}>
+                                {isPdf ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="block text-[11px] font-bold text-slate-700 truncate">
+                                  {fileObj.filename}
+                                </span>
+                                <span className="block text-[9px] text-slate-400 font-medium">
+                                  {isPdf ? `📄 ${fileObj.pageCount || 1} Pages` : "🖼️ 1 Page"}
+                                </span>
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-600 flex-shrink-0 animate-ping" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Quick Sandbox Upload Trap in step 2 to allow adding files */}
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <div className="relative border border-dashed border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-blue-50/20 rounded-xl p-2.5 text-center transition-all">
+                        <input
+                          type="file"
+                          id="sandbox-add-file"
+                          accept="image/*,application/pdf"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0] && session) {
+                              const localFile = e.target.files[0];
+                              const reader = new FileReader();
+                              reader.onload = async () => {
+                                const base64Data = reader.result as string;
+                                const resolvedFileType = localFile.type || (localFile.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+                                const estPageCount = resolvedFileType === "application/pdf" ? 3 : 1;
+                                
+                                const newFileObj = {
+                                  filename: localFile.name,
+                                  fileType: resolvedFileType,
+                                  fileData: base64Data,
+                                  pageCount: estPageCount,
+                                };
+
+                                const updatedFiles = [...filesList, newFileObj];
+                                setSession({
+                                  ...session,
+                                  files: updatedFiles,
+                                });
+                                setSelectedFileIndex(updatedFiles.length - 1);
+                              };
+                              reader.readAsDataURL(localFile);
+                            }
+                          }}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <span className="text-[10px] font-bold text-slate-500 hover:text-blue-600 cursor-pointer flex items-center justify-center gap-1">
+                          <Plus className="w-3.5 h-3.5 text-blue-500" /> Click to add files
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Specifications Form */}
-                <div className="space-y-5">
-                  
-                  {/* Print Medium Selector */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
-                      Select Print Medium / Merchandise
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { id: "document", label: "A4 Document" },
-                        { id: "poster", label: "Classic Poster" },
-                        { id: "tshirt", label: "Cotton T-Shirt" },
-                        { id: "mug", label: "Ceramic Mug" },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() =>
-                            setSettings({
-                              ...settings,
-                              merchandiseType: item.id as any,
-                            })
-                          }
-                          className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all ${
-                            settings.merchandiseType === item.id
-                              ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/15"
-                              : "bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100"
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Print Color Mode */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
-                      Color Output Mode
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setSettings({ ...settings, colorMode: "color" })}
-                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-2 transition-all ${
-                          settings.colorMode === "color"
-                            ? "bg-blue-600 text-white border-blue-600 shadow-md"
-                            : "bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300"
-                        }`}
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-rose-500 via-amber-400 to-sky-400" />
-                        Full Color
-                      </button>
-                      <button
-                        onClick={() => setSettings({ ...settings, colorMode: "bw" })}
-                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-2 transition-all ${
-                          settings.colorMode === "bw"
-                            ? "bg-blue-600 text-white border-blue-600 shadow-md"
-                            : "bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300"
-                        }`}
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                        Grayscale
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* PDF Page selector (if document is PDF) */}
-                  {(session.file.fileType === "application/pdf" ||
-                    session.file.filename.toLowerCase().endsWith(".pdf")) && (
-                    <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                        <FileText className="w-4 h-4 text-blue-600" />
-                        PDF Document detected
+                {/* 2. Center Column - Interactive Canvas & Preview (5 cols) */}
+                <div className="lg:col-span-5 flex flex-col gap-3">
+                  <div className="bg-slate-100 border border-slate-200 rounded-3xl p-1.5 shadow-inner">
+                    {activeFile ? (
+                      <InteractiveCanvas
+                        filename={activeFile.filename}
+                        fileType={activeFile.fileType}
+                        fileData={activeFile.fileData}
+                        settings={settings}
+                        onUpdateSettings={(newSettings) => setSettings(newSettings)}
+                      />
+                    ) : (
+                      <div className="h-[400px] flex items-center justify-center text-xs text-slate-400">
+                        No active file preview
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                          Pages to Extract & Print
+                    )}
+                  </div>
+                  {activeFile && (
+                    <span className="text-[10px] text-slate-400 font-mono text-center block truncate px-2 leading-none">
+                      Previewing file: <strong>{activeFile.filename}</strong>
+                    </span>
+                  )}
+                </div>
+
+                {/* 3. Right Column - Locked A4 & Monochrome Settings Form (4 cols) */}
+                <div className="lg:col-span-4 space-y-4">
+                  <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                    
+                    {/* Section Header */}
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                      <Sliders className="w-4 h-4 text-blue-600" />
+                      <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">
+                        Print Specifications
+                      </h3>
+                    </div>
+
+                    {/* Specifications Form */}
+                    <div className="space-y-4">
+                      
+                      {/* Print Medium Locked to A4 */}
+                      <div className="space-y-2 bg-slate-50 border border-slate-200/50 p-3.5 rounded-2xl">
+                        <label className="text-[9px] font-extrabold text-slate-400 block uppercase tracking-wider leading-none">
+                          Paper Selection / पेपर साइज़
                         </label>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {[
-                            { id: "all", label: "All Pages" },
-                            { id: "first", label: "Page 1" },
-                            { id: "custom", label: "Range" },
-                          ].map((item) => (
-                            <button
-                              key={item.id}
-                              onClick={() =>
-                                setSettings({
-                                  ...settings,
-                                  pageRangeMode: item.id as any,
-                                })
-                              }
-                              className={`py-1.5 px-2 rounded text-[10px] font-mono font-semibold border transition-all ${
-                                settings.pageRangeMode === item.id
-                                  ? "bg-blue-50 border-blue-200 text-blue-700"
-                                  : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
-                              }`}
-                            >
-                              {item.label}
-                            </button>
-                          ))}
+                        <div className="flex items-center gap-3 mt-1">
+                          <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm">
+                            A4
+                          </div>
+                          <div>
+                            <span className="block text-xs font-bold text-slate-800">A4 Document Paper</span>
+                            <span className="block text-[9px] text-slate-400 uppercase tracking-wide font-semibold mt-0.5">Standard A4 Size Locked</span>
+                          </div>
                         </div>
                       </div>
 
-                      {settings.pageRangeMode === "custom" && (
-                        <div className="space-y-1.5 animate-fadeIn">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase">
-                            Specific Page Range List
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g., 1, 3, 5-8"
-                            value={settings.customPages}
-                            onChange={(e) =>
-                              setSettings({ ...settings, customPages: e.target.value })
-                            }
-                            className="w-full bg-white border border-slate-200 text-xs font-mono text-slate-800 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Quantity Counter */}
-                  <div className="flex items-center justify-between py-3 border-t border-b border-slate-100 my-2">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Quantity / Copies</span>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() =>
-                          setSettings({
-                            ...settings,
-                            copies: Math.max(1, settings.copies - 1),
-                          })
-                        }
-                        className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center justify-center transition-colors border border-slate-200/80"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-sm font-mono font-bold text-slate-900 min-w-[20px] text-center">
-                        {String(settings.copies).padStart(2, "0")}
-                      </span>
-                      <button
-                        onClick={() =>
-                          setSettings({ ...settings, copies: settings.copies + 1 })
-                        }
-                        className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center justify-center transition-colors border border-slate-200/80"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Double sided option (A4 only) */}
-                  {settings.merchandiseType === "document" && (
-                    <div className="flex items-center justify-between py-1">
-                      <div>
-                        <span className="text-xs font-bold text-slate-700 block uppercase tracking-wider">
-                          Double-Sided Print
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          Duplex short or long edge flip
-                        </span>
-                      </div>
-                      <button
-                        onClick={() =>
-                          setSettings({ ...settings, doubleSided: !settings.doubleSided })
-                        }
-                        className="text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        {settings.doubleSided ? (
-                          <ToggleRight className="w-10 h-10 text-blue-600" />
-                        ) : (
-                          <ToggleLeft className="w-10 h-10 text-slate-300" />
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Image Aesthetics Filters (only images on products) */}
-                  {settings.merchandiseType !== "document" && (
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Image Aesthetics Filter
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { id: "normal", label: "Normal" },
-                          { id: "grayscale", label: "Grayscale" },
-                          { id: "sepia", label: "Retro Sepia" },
-                        ].map((filterItem) => (
+                      {/* Print Color Mode */}
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-extrabold text-slate-400 block uppercase tracking-wider leading-none">
+                          Print Color Mode / प्रिंट का रंग
+                        </label>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
                           <button
-                            key={filterItem.id}
+                            onClick={() => setSettings({ ...settings, colorMode: "color" })}
+                            className={`py-2 px-2.5 rounded-xl text-xs font-semibold border flex flex-col items-center justify-center gap-1.5 transition-all ${
+                              settings.colorMode === "color"
+                                ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/15"
+                                : "bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-rose-500 via-amber-400 to-sky-400" />
+                              <span>Full Color</span>
+                            </div>
+                            <span className="text-[9px] opacity-90 font-bold">₹5 per page</span>
+                          </button>
+                          <button
+                            onClick={() => setSettings({ ...settings, colorMode: "bw" })}
+                            className={`py-2 px-2.5 rounded-xl text-xs font-semibold border flex flex-col items-center justify-center gap-1.5 transition-all ${
+                              settings.colorMode === "bw"
+                                ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/15"
+                                : "bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                              <span>Monochrome</span>
+                            </div>
+                            <span className="text-[9px] opacity-90 font-bold">₹3 per page</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Quantity Counter */}
+                      <div className="flex items-center justify-between py-2.5 border-t border-b border-slate-100 my-1">
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Copies / प्रतियां</span>
+                        <div className="flex items-center gap-3">
+                          <button
                             onClick={() =>
                               setSettings({
                                 ...settings,
-                                filter: filterItem.id as any,
+                                copies: Math.max(1, settings.copies - 1),
                               })
                             }
-                            className={`py-1.5 px-2 rounded text-[10px] font-semibold border transition-all ${
-                              settings.filter === filterItem.id
-                                ? "bg-blue-50 border-blue-200 text-blue-700"
-                                : "bg-white border-slate-200 text-slate-500"
-                            }`}
+                            className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center justify-center transition-colors border border-slate-200/80"
                           >
-                            {filterItem.label}
+                            <Minus className="w-3.5 h-3.5" />
                           </button>
-                        ))}
+                          <span className="text-sm font-mono font-bold text-slate-900 min-w-[20px] text-center">
+                            {String(settings.copies).padStart(2, "0")}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setSettings({ ...settings, copies: settings.copies + 1 })
+                            }
+                            className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center justify-center transition-colors border border-slate-200/80"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Double sided option */}
+                      <div className="flex items-center justify-between py-1">
+                        <div>
+                          <span className="text-xs font-bold text-slate-700 block uppercase tracking-wider leading-none">
+                            Double-Sided Print
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-1 block">
+                            Duplex short or long edge flip
+                          </span>
+                        </div>
+                        <button
+                          onClick={() =>
+                            setSettings({ ...settings, doubleSided: !settings.doubleSided })
+                          }
+                          className="text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                          {settings.doubleSided ? (
+                            <ToggleRight className="w-10 h-10 text-blue-600" />
+                          ) : (
+                            <ToggleLeft className="w-10 h-10 text-slate-300" />
+                          )}
+                        </button>
                       </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Print Dispatch Release Action Bar */}
-                <div className="mt-8 pt-4 border-t border-slate-100">
-                  <div className="flex justify-between items-end mb-4">
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Estimate</p>
-                      <p className="text-2xl font-black text-slate-900">${estimatePrice()}</p>
+                    {/* Print Dispatch Release Action Bar */}
+                    <div className="mt-6 pt-4 border-t border-slate-100">
+                      <div className="flex justify-between items-end mb-4">
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Estimate</p>
+                          <p className="text-2xl font-black text-slate-900">₹{estimatePrice()}</p>
+                          <span className="text-[9px] text-slate-400 leading-none">
+                            ({totalPagesCount} pages × {settings.colorMode === "color" ? "₹5" : "₹3"} × {settings.copies} copy)
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-emerald-600 font-extrabold bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-md uppercase tracking-wider">
+                          Ready to Print
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => triggerPrintRelease(false)}
+                        className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-wider text-xs uppercase flex items-center justify-center gap-2.5 transition-all shadow-md shadow-blue-600/25 active:scale-95 cursor-pointer"
+                      >
+                        <Printer className="w-4 h-4" />
+                        DISPATCH TO USB PRINTER
+                      </button>
+
+                      <div className="mt-3.5 flex items-center justify-center gap-1.5 text-[9px] text-rose-500 font-mono text-center font-semibold uppercase tracking-wider bg-rose-50/50 p-2 rounded-lg border border-rose-100">
+                        <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" /> Cloud auto-delete: active on print trigger.
+                      </div>
                     </div>
-                    <p className="text-[10px] text-emerald-600 font-extrabold bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-md uppercase tracking-wider">
-                      USB Spool Ready
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={triggerPrintRelease}
-                    className="w-full py-4 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-wider text-xs uppercase flex items-center justify-center gap-2.5 transition-all shadow-md shadow-blue-600/25 active:scale-95"
-                  >
-                    <Printer className="w-4 h-4" />
-                    DISPATCH TO USB PRINTER
-                  </button>
-
-                  <div className="mt-4 flex items-center justify-center gap-1.5 text-[9px] text-rose-500 font-mono text-center font-semibold uppercase tracking-wider bg-rose-50/50 p-2 rounded-lg border border-rose-100">
-                    <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" /> Cloud auto-delete: active on spool dispatch.
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            );
+          })()
         )}
       </main>
 

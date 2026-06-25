@@ -16,7 +16,8 @@ async function startServer() {
     string,
     {
       id: string;
-      file?: { filename: string; fileType: string; fileData: string };
+      file?: { filename: string; fileType: string; fileData: string; pageCount?: number };
+      files?: Array<{ filename: string; fileType: string; fileData: string; pageCount?: number }>;
       status: "waiting" | "uploaded" | "completed";
     }
   > = {};
@@ -39,13 +40,23 @@ async function startServer() {
 
   app.post("/api/session/:sessionId/upload", (req, res) => {
     const { sessionId } = req.params;
-    const { filename, fileType, fileData } = req.body; // fileData is base64 format
+    const { filename, fileType, fileData, pageCount, files } = req.body;
     const session = sessions[sessionId];
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    session.file = { filename, fileType, fileData };
+    if (files && Array.isArray(files)) {
+      session.files = files;
+      if (files.length > 0) {
+        session.file = files[0];
+      }
+    } else if (filename && fileData) {
+      const singleFile = { filename, fileType: fileType || "application/pdf", fileData, pageCount: pageCount || 1 };
+      session.file = singleFile;
+      session.files = [singleFile];
+    }
+    
     session.status = "uploaded";
     res.json({ success: true, status: "uploaded" });
   });
@@ -56,6 +67,7 @@ async function startServer() {
     if (session) {
       // Clear file contents securely (cloud auto-deletion)
       delete session.file;
+      delete session.files;
       session.status = "completed";
     }
     res.json({ success: true });

@@ -4,7 +4,14 @@ export interface PrintSession {
     filename: string;
     fileType: string;
     fileData: string; // Base64 Content
+    pageCount?: number;
   };
+  files?: Array<{
+    filename: string;
+    fileType: string;
+    fileData: string; // Base64 Content
+    pageCount?: number;
+  }>;
   status: "waiting" | "uploaded" | "completed";
 }
 

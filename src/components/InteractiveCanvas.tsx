@@ -142,50 +142,12 @@ export default function InteractiveCanvas({
                 />
               </div>
             ) : (
-              // Real PDF rendering iframe + open option
-              <div className="w-full h-full flex flex-col justify-between font-sans relative z-10 bg-white">
-                {/* Header info */}
-                <div className="border-b border-slate-100 p-2.5 bg-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <div className="w-5.5 h-5.5 bg-rose-100 rounded flex items-center justify-center text-rose-600 flex-shrink-0">
-                      <FileText className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-bold text-slate-800 truncate max-w-[120px] leading-tight">
-                        {filename}
-                      </div>
-                      <div className="text-[8px] text-emerald-600 font-extrabold uppercase tracking-wider leading-none">
-                        ✓ Connected & Ready
-                      </div>
-                    </div>
-                  </div>
-                  <a
-                    href={fileData}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[9px] uppercase tracking-wider px-2.5 py-1 rounded shadow-sm hover:shadow transition-all flex items-center gap-1 cursor-pointer"
-                  >
-                    Open PDF ↗
-                  </a>
-                </div>
-
-                {/* PDF Live iframe viewer / embed */}
-                <div className="flex-1 w-full bg-slate-100 relative min-h-[140px]">
-                  <iframe
-                    src={`${fileData}#toolbar=0&navpanes=0&scrollbar=1`}
-                    title="PDF Live Preview"
-                    className="w-full h-full border-0 absolute inset-0"
-                  />
-                </div>
-
-                {/* Footer status */}
-                <div className="border-t border-slate-100 p-2 flex justify-between items-center text-[8px] font-mono font-bold text-slate-400 bg-slate-50">
-                  <span>PRINTIO CLOUD RECEIVER</span>
-                  <span className="text-emerald-600 font-extrabold">
-                    PAGE RANGE: {settings.pageRangeMode === "first" ? "PAGE 1" : "ALL"}
-                  </span>
-                </div>
-              </div>
+              // Only raw PDF iframe occupying full 100% area
+              <iframe
+                src={`${fileData}#toolbar=0&navpanes=0&scrollbar=1`}
+                title="PDF Live Preview"
+                className="w-full h-full border-0 absolute inset-0 z-10 bg-white rounded-sm"
+              />
             )}
           </div>
         )}
