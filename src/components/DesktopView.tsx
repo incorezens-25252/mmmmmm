@@ -311,37 +311,48 @@ export default function DesktopView() {
     setPrintingPhase(`Sending ${settings.copies} ${settings.copies > 1 ? "copies" : "copy"} to physical printing queue...`);
     await new Promise((r) => setTimeout(r, 800));
 
-    // Trigger standard OS print dialog or direct iframe print for PDFs
-    const activeFileObj = session.files && session.files.length > 0
-      ? session.files[selectedFileIndex] || session.files[0]
-      : session.file;
+    // Trigger standard OS print dialog or custom high-fidelity print flow for all uploaded documents
+    const filesList = session.files && session.files.length > 0
+      ? session.files
+      : session.file
+      ? [session.file]
+      : [];
 
-    if (activeFileObj) {
-      // 1. Convert base64 fileData into a same-origin Blob URL to prevent browser sandbox/security blocks
-      let printableUrl = activeFileObj.fileData;
-      if (printableUrl && !printableUrl.startsWith("blob:")) {
-        try {
-          const parts = printableUrl.split(",");
-          const mime = parts[0].match(/:(.*?);/)?.[1] || activeFileObj.fileType || "application/pdf";
-          const base64Content = parts[1] || parts[0];
-          const binary = atob(base64Content);
-          const array = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) {
-            array[i] = binary.charCodeAt(i);
+    if (filesList.length > 0) {
+      // 1. Process all files in parallel, converting base64 data to native same-origin Blob URLs
+      const processedFiles = [];
+      for (let i = 0; i < filesList.length; i++) {
+        const fileObj = filesList[i];
+        let printableUrl = fileObj.fileData;
+        if (printableUrl && !printableUrl.startsWith("blob:")) {
+          try {
+            const parts = printableUrl.split(",");
+            const mime = parts[0].match(/:(.*?);/)?.[1] || fileObj.fileType || "application/pdf";
+            const base64Content = parts[1] || parts[0];
+            const binary = atob(base64Content);
+            const array = new Uint8Array(binary.length);
+            for (let j = 0; j < binary.length; j++) {
+              array[j] = binary.charCodeAt(j);
+            }
+            const blob = new Blob([array], { type: mime });
+            printableUrl = URL.createObjectURL(blob);
+          } catch (err) {
+            console.error("Failed to generate printable Blob URL for file index " + i + ":", err);
           }
-          const blob = new Blob([array], { type: mime });
-          printableUrl = URL.createObjectURL(blob);
-        } catch (err) {
-          console.error("Failed to generate printable Blob URL:", err);
         }
+        const isPdf = fileObj.fileType === "application/pdf" || fileObj.filename.toLowerCase().endsWith(".pdf");
+        processedFiles.push({
+          ...fileObj,
+          printableUrl,
+          isPdf
+        });
       }
 
-      // 2. Open a new top-level clean tab to bypass nested iframe sandboxes entirely
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        const isPdf = activeFileObj.fileType === "application/pdf" || activeFileObj.filename.toLowerCase().endsWith(".pdf");
-
-        if (isPdf) {
+      // If we have exactly ONE PDF and no other files, use the highly optimized direct native PDF print
+      if (processedFiles.length === 1 && processedFiles[0].isPdf) {
+        const activeFileObj = processedFiles[0];
+        const printWindow = window.open("", "_blank");
+        if (printWindow) {
           printWindow.document.write(`
             <html>
               <head>
@@ -360,7 +371,7 @@ export default function DesktopView() {
                   <div class="loader"></div>
                   <div class="text">Preparing PDF document for printing... / प्रिंटर के लिए दस्तावेज़ तैयार किया जा रहा है...</div>
                 </div>
-                <iframe src="${printableUrl}"></iframe>
+                <iframe src="${activeFileObj.printableUrl}"></iframe>
                 <script>
                   const iframe = document.querySelector('iframe');
                   
@@ -391,40 +402,412 @@ export default function DesktopView() {
               </body>
             </html>
           `);
+          printWindow.document.close();
         } else {
-          // Standard Image File
+          console.warn("Print window could not be opened, falling back to window.print");
+          window.print();
+        }
+      } else {
+        // Multi-file or customized image/PDF template-based printing
+        const printWindow = window.open("", "_blank");
+        if (printWindow) {
+          // Generate high-fidelity previews for all documents in the print queue
+          const getPrintPageHtml = (fileObj: any, index: number) => {
+            let contentHtml = "";
+
+            // Determine active filter CSS
+            let filters = "";
+            if (settings.colorMode === "bw") {
+              filters += "grayscale(1) contrast(1.25) ";
+            }
+            if (settings.filter === "grayscale") {
+              filters += "grayscale(1) contrast(1.1) ";
+            } else if (settings.filter === "sepia") {
+              filters += "sepia(1) saturate(1.5) brightness(0.95) ";
+            }
+            if (!filters) filters = "none";
+
+            if (settings.merchandiseType === "document") {
+              if (fileObj.isPdf) {
+                contentHtml = `
+                  <div class="a4-page font-sans">
+                    <iframe src="${fileObj.printableUrl}#toolbar=0&navpanes=0&scrollbar=0"></iframe>
+                  </div>
+                `;
+              } else {
+                contentHtml = `
+                  <div class="a4-page font-sans">
+                    <div class="watermark-grid"></div>
+                    <div class="image-wrapper">
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX}px, ${settings.offsetY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                    </div>
+                  </div>
+                `;
+              }
+            } else if (settings.merchandiseType === "mug") {
+              contentHtml = `
+                <div class="mug-preview">
+                  <div class="mug-handle"></div>
+                  <div class="mug-body">
+                    <div class="cylinder">
+                      ${fileObj.isPdf ? `
+                        <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
+                      ` : `
+                        <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.4}px, ${settings.offsetY * 0.4}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                      `}
+                    </div>
+                  </div>
+                </div>
+              `;
+            } else if (settings.merchandiseType === "tshirt") {
+              contentHtml = `
+                <div class="tshirt-preview">
+                  <div class="tshirt-silhouette">
+                    <svg viewBox="0 0 24 24"><path d="M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z"/></svg>
+                  </div>
+                  <div class="tshirt-print-area">
+                    ${fileObj.isPdf ? `
+                      <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
+                    ` : `
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.35}px, ${settings.offsetY * 0.35}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                    `}
+                  </div>
+                </div>
+              `;
+            } else {
+              // Poster
+              contentHtml = `
+                <div class="poster-preview">
+                  <div class="poster-inner">
+                    ${fileObj.isPdf ? `
+                      <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
+                    ` : `
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.75}px, ${settings.offsetY * 0.75}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                    `}
+                  </div>
+                </div>
+              `;
+            }
+
+            return `
+              <div class="print-page">
+                ${contentHtml}
+              </div>
+            `;
+          };
+
+          const pagesHtml = processedFiles.map((f, idx) => getPrintPageHtml(f, idx)).join("\n");
+
           printWindow.document.write(`
+            <!DOCTYPE html>
             <html>
               <head>
-                <title>Printing: ${activeFileObj.filename}</title>
+                <title>Print Spool - ${processedFiles.length} File(s)</title>
                 <style>
-                  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: white; display: flex; align-items: center; justify-content: center; }
-                  img { max-width: 100%; max-height: 100%; object-fit: contain; }
+                  body, html {
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                    background-color: #f8fafc;
+                    font-family: system-ui, -apple-system, sans-serif;
+                  }
+                  
+                  /* Screen/Preview loader */
+                  .container {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    gap: 16px;
+                    background-color: #f8fafc;
+                    z-index: 100;
+                    position: fixed;
+                    inset: 0;
+                    transition: opacity 0.5s ease;
+                  }
+                  .loader {
+                    border: 4px solid #e2e8f0;
+                    border-top: 4px solid #2563eb;
+                    border-radius: 50%;
+                    width: 36px;
+                    height: 36px;
+                    animation: spin 1s linear infinite;
+                  }
+                  @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                  }
+                  .text {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #475569;
+                  }
+
+                  .print-queue-container {
+                    display: block;
+                  }
+                  
+                  .print-page {
+                    page-break-after: always;
+                    page-break-inside: avoid;
+                    width: 100vw;
+                    height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    position: relative;
+                    box-sizing: border-box;
+                    background-color: #ffffff;
+                    overflow: hidden;
+                  }
+                  
+                  /* A4 Document styles */
+                  .a4-page {
+                    position: relative;
+                    width: 210mm;
+                    height: 297mm;
+                    background-color: #ffffff;
+                    overflow: hidden;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-sizing: border-box;
+                    box-shadow: none !important;
+                    border: none !important;
+                  }
+                  
+                  /* Mug styles */
+                  .mug-preview {
+                    position: relative;
+                    width: 320px;
+                    height: 320px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                  }
+                  .mug-handle {
+                    position: absolute;
+                    right: 40px;
+                    width: 40px;
+                    height: 120px;
+                    border: 12px solid #cbd5e1;
+                    border-radius: 0 40px 40px 0;
+                    background: transparent;
+                    z-index: 0;
+                    transform: translateX(10px);
+                  }
+                  .mug-body {
+                    width: 200px;
+                    height: 240px;
+                    background: #ffffff;
+                    border: 6px solid #cbd5e1;
+                    border-radius: 0 0 40px 40px;
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                    position: relative;
+                    z-index: 10;
+                  }
+                  .cylinder {
+                    width: 120px;
+                    height: 150px;
+                    border: 2px dashed #cbd5e1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                    background: #f8fafc;
+                    position: relative;
+                    border-radius: 4px;
+                  }
+                  
+                  /* T-shirt styles */
+                  .tshirt-preview {
+                    position: relative;
+                    width: 400px;
+                    height: 400px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                  }
+                  .tshirt-silhouette {
+                    position: absolute;
+                    inset: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #e2e8f0;
+                  }
+                  .tshirt-silhouette svg {
+                    width: 350px;
+                    height: 350px;
+                    fill: currentColor;
+                  }
+                  .tshirt-print-area {
+                    position: absolute;
+                    width: 130px;
+                    height: 160px;
+                    border: 2px dashed #3b82f6;
+                    background: #f8fafc;
+                    border-radius: 4px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                    z-index: 10;
+                    transform: translateY(-10px);
+                  }
+                  
+                  /* Poster styles */
+                  .poster-preview {
+                    position: relative;
+                    width: 280px;
+                    height: 370px;
+                    background: #0f172a;
+                    border: 12px solid #020617;
+                    border-radius: 6px;
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+                    overflow: hidden;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 10px;
+                  }
+                  .poster-inner {
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    border: 1px solid #334155;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                    background: #000000;
+                  }
+                  
+                  /* Universal preview element styles */
+                  .image-wrapper {
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
+                  }
+                  
+                  img {
+                    max-width: 100%;
+                    max-height: 100%;
+                    object-fit: contain;
+                  }
+                  
+                  iframe {
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                  }
+                  
+                  .watermark-grid {
+                    position: absolute;
+                    inset: 0;
+                    background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+                    background-size: 12px 12px;
+                    opacity: 0.6;
+                    pointer-events: none;
+                  }
+                  
+                  .pdf-placeholder {
+                    font-size: 11px;
+                    font-weight: bold;
+                    color: #64748b;
+                    text-align: center;
+                    font-family: monospace;
+                  }
+                  
                   @media print {
-                    body, html { width: 100%; height: 100%; }
-                    img { max-width: 100%; max-height: 100%; page-break-after: avoid; page-break-before: avoid; }
+                    body, html {
+                      background-color: #ffffff !important;
+                    }
+                    .container {
+                      display: none !important;
+                    }
+                    .print-page {
+                      width: 100%;
+                      height: 100vh;
+                      page-break-after: always;
+                      page-break-inside: avoid;
+                      display: flex !important;
+                      align-items: center;
+                      justify-content: center;
+                    }
+                    @page {
+                      margin: 0;
+                    }
                   }
                 </style>
               </head>
               <body>
-                <img src="${printableUrl}" />
+                <div class="container" id="loader-container">
+                  <div class="loader"></div>
+                  <div class="text">Spooling all files for printing... / प्रिंटर के लिए सभी दस्तावेज़ तैयार किए जा रहे हैं (${processedFiles.length} दस्तावेज़)</div>
+                </div>
+                <div class="print-queue-container">
+                  ${pagesHtml}
+                </div>
                 <script>
-                  window.onload = function() {
+                  const elements = Array.from(document.querySelectorAll('.print-queue-container img, .print-queue-container iframe'));
+                  let loadedCount = 0;
+                  
+                  function triggerPrint() {
+                    if (document.getElementById('loader-container').style.display === 'none') return;
+                    document.getElementById('loader-container').style.display = 'none';
                     setTimeout(function() {
-                      window.focus();
-                      window.print();
-                    }, 300);
-                  };
+                      try {
+                        window.focus();
+                        window.print();
+                      } catch (err) {
+                        console.error("Print window trigger failed:", err);
+                      }
+                    }, 500);
+                  }
+
+                  function checkAllLoaded() {
+                    loadedCount++;
+                    if (loadedCount >= elements.length) {
+                      triggerPrint();
+                    }
+                  }
+
+                  if (elements.length === 0) {
+                    triggerPrint();
+                  } else {
+                    elements.forEach(el => {
+                      if (el.tagName === 'IMG' && el.complete) {
+                        checkAllLoaded();
+                      } else {
+                        el.onload = checkAllLoaded;
+                        el.onerror = checkAllLoaded;
+                      }
+                    });
+                    
+                    // Fallback safety timeout (3.5 seconds)
+                    setTimeout(function() {
+                      triggerPrint();
+                    }, 3500);
+                  }
                 </script>
               </body>
             </html>
           `);
+          printWindow.document.close();
+        } else {
+          console.warn("Print window could not be opened, falling back to window.print");
+          window.print();
         }
-        printWindow.document.close();
-      } else {
-        // Fallback if window.open is blocked by popup blocker
-        console.warn("Print window could not be opened, falling back to iframe/window.print");
-        window.print();
       }
     } else {
       window.print();
