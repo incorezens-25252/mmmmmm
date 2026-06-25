@@ -12,6 +12,10 @@ export default function MobileView({ sessionId }: MobileViewProps) {
   const [status, setStatus] = useState<"checking" | "ready" | "uploaded" | "error" | "expired">("checking");
   const [errorMessage, setErrorMessage] = useState("");
 
+  // PWA Install Prompt State for Mobile
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
   // Verify that the session is valid when mobile loads
   useEffect(() => {
     async function checkSession() {
@@ -34,6 +38,36 @@ export default function MobileView({ sessionId }: MobileViewProps) {
     }
     checkSession();
   }, [sessionId]);
+
+  // Listen for mobile PWA install capability
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setShowInstallBtn(false);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      console.log("User installed the PrintIO mobile app");
+    }
+    setDeferredPrompt(null);
+    setShowInstallBtn(false);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -202,14 +236,26 @@ export default function MobileView({ sessionId }: MobileViewProps) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col p-6">
       {/* Header */}
-      <header className="w-full max-w-md mx-auto py-4 mb-6 flex items-center gap-3 border-b border-slate-200">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-md shadow-blue-600/10">
-          <span className="text-white font-bold text-sm">P</span>
+      <header className="w-full max-w-md mx-auto py-4 mb-6 flex items-center justify-between border-b border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-md shadow-blue-600/10">
+            <span className="text-white font-bold text-sm">P</span>
+          </div>
+          <div>
+            <span className="font-extrabold text-slate-800 text-sm tracking-tight">PrintIO Secure Upload</span>
+            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Mobile Portal</span>
+          </div>
         </div>
-        <div>
-          <span className="font-extrabold text-slate-800 text-sm tracking-tight">PrintIO Secure Upload</span>
-          <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Mobile Portal</span>
-        </div>
+
+        {showInstallBtn && (
+          <button
+            onClick={handleInstallApp}
+            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full transition-all shadow-md shadow-blue-500/10 cursor-pointer animate-pulse"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            Install App
+          </button>
+        )}
       </header>
 
       {/* Main Content */}
@@ -329,6 +375,38 @@ export default function MobileView({ sessionId }: MobileViewProps) {
         {/* Secure Cloud Auto-delete disclaimer */}
         <div className="mt-6 text-center text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 leading-relaxed">
           <ShieldCheck className="w-4 h-4 text-emerald-500" /> Cloud memory scrub triggered automatically on print.
+        </div>
+
+        {/* Mobile App Installation Guide Card */}
+        <div className="mt-8 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Smartphone className="w-4 h-4 text-blue-600" />
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+              Install as Mobile App / मोबाइल ऐप कैसे बनाएं?
+            </h3>
+          </div>
+          
+          <div className="space-y-3.5 text-[11px] text-slate-600 leading-relaxed">
+            <div className="border-b border-slate-100 pb-3">
+              <span className="font-bold text-slate-800 block mb-1">🤖 For Android (Google Chrome):</span>
+              <p>
+                Tap the three dots icon (⋮) in the top-right corner of Chrome, then select <strong className="text-blue-600">"Add to Home screen"</strong> or <strong className="text-blue-600">"Install app"</strong>.
+              </p>
+              <p className="text-slate-500 mt-1 italic">
+                क्रोम के ऊपर दाईं ओर तीन डॉट्स (⋮) पर टैप करें, फिर <strong>"Add to Home screen"</strong> या <strong>"Install app"</strong> चुनें।
+              </p>
+            </div>
+            
+            <div>
+              <span className="font-bold text-slate-800 block mb-1">🍏 For iPhone/iOS (Apple Safari):</span>
+              <p>
+                Tap the <strong className="text-blue-600">Share</strong> button (box with an arrow pointing up) at the bottom, scroll down, and tap <strong className="text-blue-600">"Add to Home Screen"</strong>.
+              </p>
+              <p className="text-slate-500 mt-1 italic">
+                सफारी ब्राउज़र में नीचे दिए गए <strong>Share</strong> बटन (तीर का निशान) पर टैप करें, फिर स्क्रॉल करके <strong>"Add to Home Screen"</strong> चुनें।
+              </p>
+            </div>
+          </div>
         </div>
       </main>
     </div>

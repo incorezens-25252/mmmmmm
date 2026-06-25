@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#0f172a" />
+  
+  <!-- Outer Glow Ring -->
+  <rect x="24" y="24" width="464" height="464" rx="88" fill="none" stroke="url(#blueGrad)" stroke-width="6" stroke-opacity="0.3" />
+
+  <!-- Printer Body Shadow -->
+  <path d="M128 320h256v80a16 16 0 0 1-16 16H144a16 16 0 0 1-16-16z" fill="#020617" opacity="0.4" />
+
+  <!-- Printing Glow Paper Flow -->
+  <path d="M160 280h192v160c0 8-8 16-16 16H176c-8 0-16-8-16-16z" fill="url(#glowGrad)" />
+
+  <!-- Printer Body -->
+  <path d="M96 208a32 32 0 0 1 32-32h256a32 32 0 0 1 32 32v112a16 16 0 0 1-16 16H112a16 16 0 0 1-16-16z" fill="#1e293b" />
+  
+  <!-- Top Paper Input Accent -->
+  <path d="M160 120a16 16 0 0 1 16-16h160a16 16 0 0 1 16 16v56H160z" fill="#334155" />
+  <path d="M176 104h160v16H176z" fill="#475569" />
+
+  <!-- Paper Output Slot Glow line -->
+  <rect x="144" y="280" width="224" height="12" rx="6" fill="#0f172a" />
+  <rect x="160" y="282" width="192" height="4" rx="2" fill="url(#blueGrad)" />
+
+  <!-- Control Panel Light (LED) -->
+  <circle cx="136" cy="224" r="10" fill="#10b981" />
+  <circle cx="136" cy="224" r="16" fill="#10b981" fill-opacity="0.25" />
+  
+  <circle cx="172" cy="224" r="10" fill="#3b82f6" />
+
+  <!-- Floating Sparkles / Print Job Symbol -->
+  <path d="M360 120l8 16 16 8-16 8-8 16-8-16-16-8 16-8z" fill="#2563eb" />
+  <path d="M410 160l5 10 10 5-10 5-5 10-5-10-10-5 10-5z" fill="#06b6d4" />
+</svg>

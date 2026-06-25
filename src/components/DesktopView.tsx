@@ -34,6 +34,10 @@ export default function DesktopView() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [apiError, setApiError] = useState(false);
 
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
   // WebUSB Connection Status
   const [usbSupported, setUsbSupported] = useState(false);
   const [pairedDevices, setPairedDevices] = useState<any[]>([]);
@@ -90,6 +94,37 @@ export default function DesktopView() {
       }
     }
   }, []);
+
+  // Listen for PWA installation capability
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    // If app is already installed/running in standalone display mode
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setShowInstallBtn(false);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      console.log("User installed the PrintIO app");
+    }
+    setDeferredPrompt(null);
+    setShowInstallBtn(false);
+  };
 
   // Request user to choose/pair a real USB printer
   const requestUsbDevice = async () => {
@@ -368,6 +403,17 @@ export default function DesktopView() {
             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Cloud Sync Active</span>
           </div>
+
+          {showInstallBtn && (
+            <button
+              onClick={handleInstallApp}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider px-3.5 py-1.5 rounded-full transition-all shadow-md shadow-blue-500/10 cursor-pointer animate-pulse"
+              title="Install PrintIO App on this Device"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              Install App
+            </button>
+          )}
           
           {session && (
             <div className="hidden md:flex items-center gap-1.5 bg-slate-100 border border-slate-200/80 px-3 py-1 rounded-lg text-xs font-mono text-slate-600">

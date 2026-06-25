@@ -1,0 +1,25 @@
+{
+  "short_name": "PrintIO",
+  "name": "PrintIO - Mobile-to-Desktop Cloud Printer",
+  "description": "Easily pair your mobile device with your desktop workstation via QR code to transfer and print files instantly without drivers.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "utilities"]
+}
