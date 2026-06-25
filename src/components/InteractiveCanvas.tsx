@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Move, ZoomIn, ZoomOut, RotateCw, Image as ImageIcon, FileText, Sliders } from "lucide-react";
 import { CustomizationSettings } from "../types";
 
@@ -23,6 +23,50 @@ export default function InteractiveCanvas({
 
   const isImage = fileType.startsWith("image/");
   const isPdf = fileType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
+
+  // Same-origin Blob URL state for PDFs to enable security-exception-free printing
+  const [pdfBlobUrl, setPdfBlobUrl] = useState("");
+
+  useEffect(() => {
+    if (!isPdf || !fileData) {
+      setPdfBlobUrl("");
+      return;
+    }
+    if (fileData.startsWith("blob:")) {
+      setPdfBlobUrl(fileData);
+      return;
+    }
+
+    let active = true;
+    let url = "";
+    try {
+      const parts = fileData.split(",");
+      const mime = parts[0].match(/:(.*?);/)?.[1] || "application/pdf";
+      const base64Content = parts[1] || parts[0];
+      const binary = atob(base64Content);
+      const array = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([array], { type: mime });
+      url = URL.createObjectURL(blob);
+      if (active) {
+        setPdfBlobUrl(url);
+      }
+    } catch (err) {
+      console.error("Failed to convert base64 to Blob URL:", err);
+      if (active) {
+        setPdfBlobUrl(fileData);
+      }
+    }
+
+    return () => {
+      active = false;
+      if (url && url.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [fileData, isPdf]);
 
   // Filter styles
   const filterStyle = () => {
@@ -144,7 +188,7 @@ export default function InteractiveCanvas({
             ) : (
               // Only raw PDF iframe occupying full 100% area
               <iframe
-                src={`${fileData}#toolbar=0&navpanes=0&scrollbar=1`}
+                src={`${pdfBlobUrl || fileData}#toolbar=0&navpanes=0&scrollbar=1`}
                 title="PDF Live Preview"
                 className="w-full h-full border-0 absolute inset-0 z-10 bg-white rounded-sm"
               />
