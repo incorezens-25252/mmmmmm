@@ -448,6 +448,22 @@ export default function DesktopView() {
 
         const printWindow = printIframe.contentWindow;
         if (printWindow) {
+          // Read actual preview element size to scale coordinates for A4 print accurately
+          let previewWidth = 300;
+          let previewHeight = 424;
+          if (typeof document !== "undefined") {
+            const printArea = document.getElementById("print-area");
+            if (printArea) {
+              previewWidth = printArea.clientWidth || 300;
+              previewHeight = printArea.clientHeight || 424;
+            }
+          }
+
+          // A4 page in 96 DPI CSS print pixels is exactly 793.7px wide by 1122.5px tall
+          const scaleX = 793.7 / previewWidth;
+          const scaleY = 1122.5 / previewHeight;
+          const printPadding = 16 * scaleX; // Match preview's p-4 (16px) proportionally
+
           // Generate high-fidelity previews for all documents in the print queue
           const getPrintPageHtml = (fileObj: any, index: number) => {
             let contentHtml = "";
@@ -473,10 +489,10 @@ export default function DesktopView() {
                 `;
               } else {
                 contentHtml = `
-                  <div class="a4-page font-sans">
+                  <div class="a4-page font-sans" style="padding: ${printPadding}px;">
                     <div class="watermark-grid"></div>
                     <div class="image-wrapper">
-                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX}px, ${settings.offsetY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * scaleX}px, ${settings.offsetY * scaleY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                     </div>
                   </div>
                 `;
@@ -490,7 +506,7 @@ export default function DesktopView() {
                       ${fileObj.isPdf ? `
                         <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
                       ` : `
-                        <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.4}px, ${settings.offsetY * 0.4}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                        <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.6}px, ${settings.offsetY * 0.625}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                       `}
                     </div>
                   </div>
@@ -506,7 +522,7 @@ export default function DesktopView() {
                     ${fileObj.isPdf ? `
                       <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
                     ` : `
-                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.35}px, ${settings.offsetY * 0.35}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.56875}px, ${settings.offsetY * 0.58333}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                     `}
                   </div>
                 </div>
@@ -519,7 +535,7 @@ export default function DesktopView() {
                     ${fileObj.isPdf ? `
                       <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
                     ` : `
-                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.75}px, ${settings.offsetY * 0.75}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.983}px, ${settings.offsetY * 0.98}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                     `}
                   </div>
                 </div>
