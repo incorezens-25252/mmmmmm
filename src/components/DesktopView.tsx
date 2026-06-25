@@ -316,17 +316,114 @@ export default function DesktopView() {
       ? session.files[selectedFileIndex] || session.files[0]
       : session.file;
 
-    if (activeFileObj && (activeFileObj.fileType === "application/pdf" || activeFileObj.filename.toLowerCase().endsWith(".pdf"))) {
-      const iframe = document.querySelector("iframe[title='PDF Live Preview']") as HTMLIFrameElement;
-      if (iframe) {
+    if (activeFileObj) {
+      // 1. Convert base64 fileData into a same-origin Blob URL to prevent browser sandbox/security blocks
+      let printableUrl = activeFileObj.fileData;
+      if (printableUrl && !printableUrl.startsWith("blob:")) {
         try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
+          const parts = printableUrl.split(",");
+          const mime = parts[0].match(/:(.*?);/)?.[1] || activeFileObj.fileType || "application/pdf";
+          const base64Content = parts[1] || parts[0];
+          const binary = atob(base64Content);
+          const array = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            array[i] = binary.charCodeAt(i);
+          }
+          const blob = new Blob([array], { type: mime });
+          printableUrl = URL.createObjectURL(blob);
         } catch (err) {
-          console.error("Direct PDF print failed, falling back to page print:", err);
-          window.print();
+          console.error("Failed to generate printable Blob URL:", err);
         }
+      }
+
+      // 2. Open a new top-level clean tab to bypass nested iframe sandboxes entirely
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        const isPdf = activeFileObj.fileType === "application/pdf" || activeFileObj.filename.toLowerCase().endsWith(".pdf");
+
+        if (isPdf) {
+          printWindow.document.write(`
+            <html>
+              <head>
+                <title>Printing: ${activeFileObj.filename}</title>
+                <style>
+                  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+                  .container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 16px; }
+                  .loader { border: 4px solid #e2e8f0; border-top: 4px solid #2563eb; border-radius: 50%; width: 36px; height: 36px; animation: spin 1s linear infinite; }
+                  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                  .text { font-size: 14px; font-weight: 600; color: #475569; }
+                  iframe { width: 100%; height: 100%; border: none; display: none; }
+                </style>
+              </head>
+              <body>
+                <div class="container" id="loader-container">
+                  <div class="loader"></div>
+                  <div class="text">Preparing PDF document for printing... / प्रिंटर के लिए दस्तावेज़ तैयार किया जा रहा है...</div>
+                </div>
+                <iframe src="${printableUrl}"></iframe>
+                <script>
+                  const iframe = document.querySelector('iframe');
+                  
+                  function triggerPrint() {
+                    if (document.getElementById('loader-container').style.display === 'none') return;
+                    document.getElementById('loader-container').style.display = 'none';
+                    iframe.style.display = 'block';
+                    setTimeout(function() {
+                      try {
+                        iframe.contentWindow.focus();
+                        iframe.contentWindow.print();
+                      } catch (err) {
+                        console.error("Iframe print error:", err);
+                        window.print();
+                      }
+                    }, 500);
+                  }
+
+                  iframe.onload = function() {
+                    triggerPrint();
+                  };
+
+                  // Fallback in case onload event is not triggered by native PDF plugin
+                  setTimeout(function() {
+                    triggerPrint();
+                  }, 1800);
+                </script>
+              </body>
+            </html>
+          `);
+        } else {
+          // Standard Image File
+          printWindow.document.write(`
+            <html>
+              <head>
+                <title>Printing: ${activeFileObj.filename}</title>
+                <style>
+                  body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: white; display: flex; align-items: center; justify-content: center; }
+                  img { max-width: 100%; max-height: 100%; object-fit: contain; }
+                  @media print {
+                    body, html { width: 100%; height: 100%; }
+                    img { max-width: 100%; max-height: 100%; page-break-after: avoid; page-break-before: avoid; }
+                  }
+                </style>
+              </head>
+              <body>
+                <img src="${printableUrl}" />
+                <script>
+                  window.onload = function() {
+                    setTimeout(function() {
+                      window.focus();
+                      window.print();
+                    }, 300);
+                  };
+                </script>
+              </body>
+            </html>
+          `);
+        }
+        printWindow.document.close();
       } else {
+        // Fallback if window.open is blocked by popup blocker
+        console.warn("Print window could not be opened, falling back to iframe/window.print");
         window.print();
       }
     } else {
