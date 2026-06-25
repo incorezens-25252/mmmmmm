@@ -142,29 +142,47 @@ export default function InteractiveCanvas({
                 />
               </div>
             ) : (
-              // PDF simulated document
-              <div className="w-full h-full flex flex-col justify-between font-sans relative z-10">
-                <div className="border-b border-slate-100 pb-2">
-                  <div className="h-4 bg-slate-200 w-1/3 rounded-sm mb-1.5 animate-pulse" />
-                  <div className="h-3 bg-slate-100 w-2/3 rounded-sm animate-pulse" />
-                </div>
-                <div className="flex-1 py-4 flex flex-col gap-2.5 overflow-hidden">
-                  <div className="flex gap-2.5">
-                    <div className="w-10 h-10 bg-slate-100 rounded-md flex-shrink-0 animate-pulse" />
-                    <div className="flex-1 flex flex-col gap-1.5">
-                      <div className="h-3 bg-slate-100 rounded-sm w-full" />
-                      <div className="h-3 bg-slate-100 rounded-sm w-5/6" />
+              // Real PDF rendering iframe + open option
+              <div className="w-full h-full flex flex-col justify-between font-sans relative z-10 bg-white">
+                {/* Header info */}
+                <div className="border-b border-slate-100 p-2.5 bg-slate-50 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="w-5.5 h-5.5 bg-rose-100 rounded flex items-center justify-center text-rose-600 flex-shrink-0">
+                      <FileText className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold text-slate-800 truncate max-w-[120px] leading-tight">
+                        {filename}
+                      </div>
+                      <div className="text-[8px] text-emerald-600 font-extrabold uppercase tracking-wider leading-none">
+                        ✓ Connected & Ready
+                      </div>
                     </div>
                   </div>
-                  <div className="h-2 bg-slate-50 rounded-sm w-full" />
-                  <div className="h-2 bg-slate-50 rounded-sm w-full" />
-                  <div className="h-2 bg-slate-50 rounded-sm w-11/12" />
-                  <div className="h-2 bg-slate-50 rounded-sm w-10/12" />
+                  <a
+                    href={fileData}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[9px] uppercase tracking-wider px-2.5 py-1 rounded shadow-sm hover:shadow transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    Open PDF ↗
+                  </a>
                 </div>
-                <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-[8px] font-mono font-bold text-slate-400">
-                  <span>PRINTIO HANDSHAKE BRIDGE</span>
-                  <span>
-                    PAGE {settings.pageRangeMode === "first" ? "1 OF 1" : "1 OF 3"}
+
+                {/* PDF Live iframe viewer / embed */}
+                <div className="flex-1 w-full bg-slate-100 relative min-h-[140px]">
+                  <iframe
+                    src={`${fileData}#toolbar=0&navpanes=0&scrollbar=1`}
+                    title="PDF Live Preview"
+                    className="w-full h-full border-0 absolute inset-0"
+                  />
+                </div>
+
+                {/* Footer status */}
+                <div className="border-t border-slate-100 p-2 flex justify-between items-center text-[8px] font-mono font-bold text-slate-400 bg-slate-50">
+                  <span>PRINTIO CLOUD RECEIVER</span>
+                  <span className="text-emerald-600 font-extrabold">
+                    PAGE RANGE: {settings.pageRangeMode === "first" ? "PAGE 1" : "ALL"}
                   </span>
                 </div>
               </div>
