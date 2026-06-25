@@ -1,0 +1,6 @@
+{
+  "name": "PrintIO",
+  "description": "Easily customize and order high-quality printed merchandise and documents with direct QR-based mobile cloud upload.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
