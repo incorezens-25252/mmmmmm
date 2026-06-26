@@ -123,8 +123,8 @@ export default function MobileView({ sessionId }: MobileViewProps) {
         continue;
       }
 
-      if (file.size > 15 * 1024 * 1024) {
-        setErrorMessage(`"${file.name}" exceeds the 15MB limit.`);
+      if (file.size > 25 * 1024 * 1024) {
+        setErrorMessage(`"${file.name}" exceeds the 25MB limit.`);
         continue;
       }
 
@@ -318,10 +318,10 @@ export default function MobileView({ sessionId }: MobileViewProps) {
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col">
           <div className="mb-4 text-center">
             <h2 className="text-lg font-black text-slate-800 leading-tight">
-              Transmit Documents
+              Transmit Documents / फ़ाइलें भेजें
             </h2>
-            <p className="text-xs text-slate-500 mt-1 font-medium">
-              Choose one or multiple images and PDFs to print.
+            <p className="text-xs text-slate-500 mt-1 font-semibold">
+              Select multiple PDFs and Photos together to print at once.
             </p>
           </div>
 
@@ -330,7 +330,7 @@ export default function MobileView({ sessionId }: MobileViewProps) {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+            className={`border-2 border-dashed rounded-2xl p-4.5 text-center transition-all ${
               dragOver
                 ? "border-blue-600 bg-blue-50/50"
                 : "border-slate-200 hover:border-slate-300 bg-slate-50/50"
@@ -339,7 +339,7 @@ export default function MobileView({ sessionId }: MobileViewProps) {
             <input
               type="file"
               id="mobile-file-picker"
-              accept="image/*,application/pdf"
+              accept="image/*,application/pdf,.pdf"
               className="hidden"
               multiple={true}
               onChange={handleFileChange}
@@ -348,16 +348,21 @@ export default function MobileView({ sessionId }: MobileViewProps) {
 
             <label
               htmlFor="mobile-file-picker"
-              className="cursor-pointer flex flex-col items-center py-2"
+              className="cursor-pointer flex flex-col items-center py-1.5"
             >
-              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-2 border border-blue-100/50 group-hover:scale-105 transition-transform">
-                <Upload className="w-4.5 h-4.5" />
+              <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-2.5 border border-blue-100/50 group-hover:scale-105 transition-transform shadow-sm">
+                <Upload className="w-5 h-5" />
               </div>
-              <span className="text-xs font-bold text-slate-700">
-                Select Files (PDF/Image)
+              <span className="text-xs font-extrabold text-blue-600 uppercase tracking-wide">
+                Select PDFs or Images / फ़ाइलें चुनें
               </span>
-              <span className="text-[9px] text-slate-400 mt-0.5 block font-medium">
-                Multiple files can be selected together
+              <span className="text-[10px] text-slate-500 mt-1 block font-medium leading-relaxed px-2">
+                Choose <strong className="text-slate-800">multiple files</strong> at once (एक साथ कई PDFs/फ़ोटो सिलेक्ट करें)
+              </span>
+              <span className="text-[9px] text-slate-400 mt-2 block font-normal leading-normal">
+                💡 <strong className="text-slate-500">Tip:</strong> Press and hold a file on your phone to select multiple files!
+                <br />
+                (एक से ज़्यादा फ़ाइल चुनने के लिए पहली फ़ाइल पर थोड़ी देर दबाकर रखें)
               </span>
             </label>
           </div>
@@ -373,9 +378,14 @@ export default function MobileView({ sessionId }: MobileViewProps) {
           {/* Selected Files List */}
           {selectedFiles.length > 0 && (
             <div className="mt-4 space-y-2">
-              <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-1">
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-1 border-b border-slate-100">
                 <span>Selected Files ({totalFiles})</span>
-                <span className="text-slate-500">{totalPages} total pages</span>
+                <label
+                  htmlFor="mobile-file-picker"
+                  className="text-blue-600 hover:text-blue-700 cursor-pointer flex items-center gap-1 font-black text-[9px] uppercase tracking-wider bg-blue-50 px-2 py-1 rounded-lg border border-blue-100"
+                >
+                  <Plus className="w-3 h-3" /> Add More (और जोड़ें)
+                </label>
               </div>
               
               <div className="max-h-[180px] overflow-y-auto space-y-1.5 pr-1">

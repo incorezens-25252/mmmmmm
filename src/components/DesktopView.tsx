@@ -464,50 +464,54 @@ export default function DesktopView() {
           const scaleY = 1122.5 / previewHeight;
           const printPadding = 16 * scaleX; // Match preview's p-4 (16px) proportionally
 
+          // Determine active filter CSS
+          let filters = "";
+          if (settings.colorMode === "bw") {
+            filters += "grayscale(1) contrast(1.25) ";
+          }
+          if (settings.filter === "grayscale") {
+            filters += "grayscale(1) contrast(1.1) ";
+          } else if (settings.filter === "sepia") {
+            filters += "sepia(1) saturate(1.5) brightness(0.95) ";
+          }
+          if (!filters) filters = "none";
+
           // Generate high-fidelity previews for all documents in the print queue
           const getPrintPageHtml = (fileObj: any, index: number) => {
             let contentHtml = "";
 
-            // Determine active filter CSS
-            let filters = "";
-            if (settings.colorMode === "bw") {
-              filters += "grayscale(1) contrast(1.25) ";
-            }
-            if (settings.filter === "grayscale") {
-              filters += "grayscale(1) contrast(1.1) ";
-            } else if (settings.filter === "sepia") {
-              filters += "sepia(1) saturate(1.5) brightness(0.95) ";
-            }
-            if (!filters) filters = "none";
-
-            if (settings.merchandiseType === "document") {
-              if (fileObj.isPdf) {
-                contentHtml = `
-                  <div class="a4-page font-sans">
-                    <iframe src="${fileObj.printableUrl}#toolbar=0&navpanes=0&scrollbar=0"></iframe>
-                  </div>
-                `;
-              } else {
-                contentHtml = `
-                  <div class="a4-page font-sans" style="padding: ${printPadding}px;">
-                    <div class="watermark-grid"></div>
-                    <div class="image-wrapper">
-                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * scaleX}px, ${settings.offsetY * scaleY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+            if (fileObj.isPdf) {
+              // Return a PDF container placeholder that will be dynamically rendered page-by-page inside the print iframe
+              return `
+                <div class="pdf-container" data-pdf-url="${fileObj.printableUrl}">
+                  <div class="print-page">
+                    <div class="a4-page font-sans">
+                      <div class="loader-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%;">
+                        <div class="loader"></div>
+                        <div style="font-size:14px; font-weight:600; color:#475569; margin-top:12px; font-family:sans-serif;">Preparing PDF Page(s)... / दस्तावेज़ तैयार किया जा रहा है...</div>
+                      </div>
                     </div>
                   </div>
-                `;
-              }
+                </div>
+              `;
+            }
+
+            if (settings.merchandiseType === "document") {
+              contentHtml = `
+                <div class="a4-page font-sans" style="padding: ${printPadding}px;">
+                  <div class="watermark-grid"></div>
+                  <div class="image-wrapper">
+                    <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * scaleX}px, ${settings.offsetY * scaleY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                  </div>
+                </div>
+              `;
             } else if (settings.merchandiseType === "mug") {
               contentHtml = `
                 <div class="mug-preview">
                   <div class="mug-handle"></div>
                   <div class="mug-body">
                     <div class="cylinder">
-                      ${fileObj.isPdf ? `
-                        <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
-                      ` : `
-                        <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.6}px, ${settings.offsetY * 0.625}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
-                      `}
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.6}px, ${settings.offsetY * 0.625}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                     </div>
                   </div>
                 </div>
@@ -519,11 +523,7 @@ export default function DesktopView() {
                     <svg viewBox="0 0 24 24"><path d="M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z"/></svg>
                   </div>
                   <div class="tshirt-print-area">
-                    ${fileObj.isPdf ? `
-                      <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
-                    ` : `
-                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.56875}px, ${settings.offsetY * 0.58333}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
-                    `}
+                    <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.56875}px, ${settings.offsetY * 0.58333}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                   </div>
                 </div>
               `;
@@ -532,11 +532,7 @@ export default function DesktopView() {
               contentHtml = `
                 <div class="poster-preview">
                   <div class="poster-inner">
-                    ${fileObj.isPdf ? `
-                      <div class="pdf-placeholder">PDF: ${fileObj.filename}</div>
-                    ` : `
-                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.983}px, ${settings.offsetY * 0.98}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
-                    `}
+                    <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.983}px, ${settings.offsetY * 0.98}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                   </div>
                 </div>
               `;
@@ -557,6 +553,7 @@ export default function DesktopView() {
             <html>
               <head>
                 <title>Print Spool - ${processedFiles.length} File(s)</title>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
                 <style>
                   body, html {
                     margin: 0;
@@ -605,6 +602,7 @@ export default function DesktopView() {
                   .print-page {
                     page-break-after: always;
                     page-break-inside: avoid;
+                    break-after: always;
                     width: 100vw;
                     height: 100vh;
                     display: flex;
@@ -614,6 +612,11 @@ export default function DesktopView() {
                     box-sizing: border-box;
                     background-color: #ffffff;
                     overflow: hidden;
+                  }
+                  
+                  .print-page:last-child {
+                    page-break-after: avoid !important;
+                    break-after: avoid !important;
                   }
                   
                   /* A4 Document styles */
@@ -785,6 +788,9 @@ export default function DesktopView() {
                   @media print {
                     body, html {
                       background-color: #ffffff !important;
+                      margin: 0 !important;
+                      padding: 0 !important;
+                      overflow: hidden !important;
                     }
                     .container {
                       display: none !important;
@@ -794,9 +800,15 @@ export default function DesktopView() {
                       height: 100vh;
                       page-break-after: always;
                       page-break-inside: avoid;
+                      break-inside: avoid;
                       display: flex !important;
                       align-items: center;
                       justify-content: center;
+                      box-sizing: border-box;
+                    }
+                    .print-page:last-child {
+                      page-break-after: avoid !important;
+                      break-after: avoid !important;
                     }
                     @page {
                       margin: 0;
@@ -807,15 +819,79 @@ export default function DesktopView() {
               <body>
                 <div class="container" id="loader-container">
                   <div class="loader"></div>
-                  <div class="text">Spooling all files for printing... / प्रिंटर के लिए सभी दस्तावेज़ तैयार किए जा रहे हैं (${processedFiles.length} दस्तावेज़)</div>
+                  <div class="text">Processing document page(s)... / प्रिंट के लिए दस्तावेज़ तैयार किया जा रहा है...</div>
                 </div>
                 <div class="print-queue-container">
                   ${pagesHtml}
                 </div>
                 <script>
-                  const elements = Array.from(document.querySelectorAll('.print-queue-container img, .print-queue-container iframe'));
+                  // Configure PDF.js worker
+                  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+                  async function loadAndRenderPDFs() {
+                    const containers = Array.from(document.querySelectorAll('.pdf-container'));
+                    if (containers.length === 0) return;
+
+                    for (const container of containers) {
+                      const url = container.getAttribute('data-pdf-url');
+                      try {
+                        const loadingTask = pdfjsLib.getDocument(url);
+                        const pdf = await loadingTask.promise;
+                        const numPages = pdf.numPages;
+
+                        const pagesFragment = document.createDocumentFragment();
+
+                        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                          const page = await pdf.getPage(pageNum);
+                          // Render at 2.2x scale for premium crisp print density
+                          const viewport = page.getViewport({ scale: 2.2 });
+                          
+                          const canvas = document.createElement('canvas');
+                          const context = canvas.getContext('2d');
+                          canvas.width = viewport.width;
+                          canvas.height = viewport.height;
+
+                          await page.render({
+                            canvasContext: context,
+                            viewport: viewport
+                          }).promise;
+
+                          // Convert canvas directly to jpeg base64 data for absolute print reliability
+                          const imgUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+                          const printPage = document.createElement('div');
+                          printPage.className = 'print-page';
+
+                          let contentHtml = '';
+                          if ("${settings.merchandiseType}" === "document") {
+                            contentHtml = "<div class='a4-page font-sans' style='padding: " + ${printPadding} + "px;'><div class='watermark-grid'></div><div class='image-wrapper'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * ${scaleX}) + "px, " + (${settings.offsetY} * ${scaleY}) + "px) scale(" + ${settings.scale} + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                          } else if ("${settings.merchandiseType}" === "mug") {
+                            contentHtml = "<div class='mug-preview'><div class='mug-handle'></div><div class='mug-body'><div class='cylinder'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * 0.6) + "px, " + (${settings.offsetY} * 0.625) + "px) scale(" + ${settings.scale} + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div></div>";
+                          } else if ("${settings.merchandiseType}" === "tshirt") {
+                            contentHtml = "<div class='tshirt-preview'><div class='tshirt-silhouette'><svg viewBox='0 0 24 24'><path d='M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z'/></svg></div><div class='tshirt-print-area'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * 0.56875) + "px, " + (${settings.offsetY} * 0.58333) + "px) scale(" + (${settings.scale} * 0.85) + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                          } else {
+                            contentHtml = "<div class='poster-preview'><div class='poster-inner'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * 0.983) + "px, " + (${settings.offsetY} * 0.98) + "px) scale(" + (${settings.scale} * 1.05) + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                          }
+
+                          printPage.innerHTML = contentHtml;
+                          pagesFragment.appendChild(printPage);
+                        }
+
+                        container.parentNode.replaceChild(pagesFragment, container);
+                      } catch (err) {
+                        console.error("Failed to render PDF page via PDF.js:", err);
+                        // Fallback: render simple PDF iframe if engine errors out
+                        const fallbackPage = document.createElement('div');
+                        fallbackPage.className = 'print-page';
+                        fallbackPage.innerHTML = "<div class='a4-page font-sans'><iframe src='" + url + "#toolbar=0&navpanes=0&scrollbar=0'></iframe></div>";
+                        container.parentNode.replaceChild(fallbackPage, container);
+                      }
+                    }
+                  }
+
                   let loadedCount = 0;
-                  
+                  let elements = [];
+
                   function triggerPrint() {
                     if (document.getElementById('loader-container').style.display === 'none') return;
                     document.getElementById('loader-container').style.display = 'none';
@@ -836,22 +912,44 @@ export default function DesktopView() {
                     }
                   }
 
-                  if (elements.length === 0) {
-                    triggerPrint();
-                  } else {
-                    elements.forEach(el => {
-                      if (el.tagName === 'IMG' && el.complete) {
-                        checkAllLoaded();
-                      } else {
-                        el.onload = checkAllLoaded;
-                        el.onerror = checkAllLoaded;
-                      }
-                    });
-                    
-                    // Fallback safety timeout (3.5 seconds)
-                    setTimeout(function() {
+                  async function init() {
+                    try {
+                      await loadAndRenderPDFs();
+                    } catch (err) {
+                      console.error("Error in loading and rendering PDFs:", err);
+                    }
+
+                    // Enforce last child has no page-break-after/break-after to stop extra trailing page
+                    const allPrintPages = Array.from(document.querySelectorAll('.print-page'));
+                    if (allPrintPages.length > 0) {
+                      allPrintPages[allPrintPages.length - 1].style.pageBreakAfter = 'avoid';
+                      allPrintPages[allPrintPages.length - 1].style.breakAfter = 'avoid';
+                    }
+
+                    elements = Array.from(document.querySelectorAll('.print-queue-container img, .print-queue-container iframe'));
+                    if (elements.length === 0) {
                       triggerPrint();
-                    }, 3500);
+                    } else {
+                      elements.forEach(el => {
+                        if (el.tagName === 'IMG' && el.complete) {
+                          checkAllLoaded();
+                        } else {
+                          el.onload = checkAllLoaded;
+                          el.onerror = checkAllLoaded;
+                        }
+                      });
+                      
+                      // Fallback timeout (5 seconds)
+                      setTimeout(function() {
+                        triggerPrint();
+                      }, 5000);
+                    }
+                  }
+
+                  if (document.readyState === 'complete') {
+                    init();
+                  } else {
+                    window.onload = init;
                   }
                 </script>
               </body>
