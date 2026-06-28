@@ -209,11 +209,40 @@ export default function DesktopView() {
 
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
 
+  const [fileAdjustments, setFileAdjustments] = useState<Record<number, {
+    scale: number;
+    offsetX: number;
+    offsetY: number;
+    rotation: number;
+    filter: "normal" | "grayscale" | "sepia";
+  }>>({});
+
+  const DEFAULT_ADJUSTMENTS = {
+    scale: 1.0,
+    offsetX: 0,
+    offsetY: 0,
+    rotation: 0,
+    filter: "normal" as const,
+  };
+
+  const getFileSettings = (idx: number): CustomizationSettings => {
+    const adj = fileAdjustments[idx] || DEFAULT_ADJUSTMENTS;
+    return {
+      ...settings,
+      scale: adj.scale,
+      offsetX: adj.offsetX,
+      offsetY: adj.offsetY,
+      rotation: adj.rotation,
+      filter: adj.filter,
+    };
+  };
+
   const startLocalStandaloneSession = () => {
     setLoadingSession(true);
     setPrintStatus("idle");
     setPolling(false);
     setApiError(false);
+    setFileAdjustments({});
     setSession({
       id: "local-standalone-mode",
       status: "waiting",
@@ -227,6 +256,7 @@ export default function DesktopView() {
     setPrintStatus("idle");
     setPolling(true);
     setApiError(false);
+    setFileAdjustments({});
     try {
       const res = await fetch("/api/session/create");
       if (!res.ok) {
@@ -505,26 +535,27 @@ export default function DesktopView() {
           const scaleY = 1122.5 / previewHeight;
           const printPadding = 16 * scaleX; // Match preview's p-4 (16px) proportionally
 
-          // Determine active filter CSS
-          let filters = "";
-          if (settings.colorMode === "bw") {
-            filters += "grayscale(1) contrast(1.25) ";
-          }
-          if (settings.filter === "grayscale") {
-            filters += "grayscale(1) contrast(1.1) ";
-          } else if (settings.filter === "sepia") {
-            filters += "sepia(1) saturate(1.5) brightness(0.95) ";
-          }
-          if (!filters) filters = "none";
-
           // Generate high-fidelity previews for all documents in the print queue
           const getPrintPageHtml = (fileObj: any, index: number) => {
             let contentHtml = "";
+            const fileSettings = getFileSettings(index);
+
+            // Determine active filter CSS for this specific file
+            let fileFilters = "";
+            if (settings.colorMode === "bw") {
+              fileFilters += "grayscale(1) contrast(1.25) ";
+            }
+            if (fileSettings.filter === "grayscale") {
+              fileFilters += "grayscale(1) contrast(1.1) ";
+            } else if (fileSettings.filter === "sepia") {
+              fileFilters += "sepia(1) saturate(1.5) brightness(0.95) ";
+            }
+            if (!fileFilters) fileFilters = "none";
 
             if (fileObj.isPdf) {
               // Return a PDF container placeholder that will be dynamically rendered page-by-page inside the print iframe
               return `
-                <div class="pdf-container" data-pdf-url="${fileObj.printableUrl}">
+                <div class="pdf-container" data-pdf-url="${fileObj.printableUrl}" data-pdf-scale="${fileSettings.scale}" data-pdf-offset-x="${fileSettings.offsetX}" data-pdf-offset-y="${fileSettings.offsetY}" data-pdf-rotation="${fileSettings.rotation}" data-pdf-filter="${fileSettings.filter}">
                   <div class="print-page">
                     <div class="a4-page font-sans">
                       <div class="loader-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%;">
@@ -542,7 +573,7 @@ export default function DesktopView() {
                 <div class="a4-page font-sans" style="padding: ${printPadding}px;">
                   <div class="watermark-grid"></div>
                   <div class="image-wrapper">
-                    <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * scaleX}px, ${settings.offsetY * scaleY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                    <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * scaleX}px, ${fileSettings.offsetY * scaleY}px) scale(${fileSettings.scale}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                   </div>
                 </div>
               `;
@@ -552,7 +583,7 @@ export default function DesktopView() {
                   <div class="mug-handle"></div>
                   <div class="mug-body">
                     <div class="cylinder">
-                      <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.6}px, ${settings.offsetY * 0.625}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                      <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * 0.6}px, ${fileSettings.offsetY * 0.625}px) scale(${fileSettings.scale}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                     </div>
                   </div>
                 </div>
@@ -564,7 +595,7 @@ export default function DesktopView() {
                     <svg viewBox="0 0 24 24"><path d="M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z"/></svg>
                   </div>
                   <div class="tshirt-print-area">
-                    <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.56875}px, ${settings.offsetY * 0.58333}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                    <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * 0.56875}px, ${fileSettings.offsetY * 0.58333}px) scale(${fileSettings.scale * 0.85}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                   </div>
                 </div>
               `;
@@ -573,7 +604,7 @@ export default function DesktopView() {
               contentHtml = `
                 <div class="poster-preview">
                   <div class="poster-inner">
-                    <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.983}px, ${settings.offsetY * 0.98}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                    <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * 0.983}px, ${fileSettings.offsetY * 0.98}px) scale(${fileSettings.scale * 1.05}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
                   </div>
                 </div>
               `;
@@ -875,6 +906,23 @@ export default function DesktopView() {
 
                     for (const container of containers) {
                       const url = container.getAttribute('data-pdf-url');
+                      const pdfScale = parseFloat(container.getAttribute('data-pdf-scale') || '1.0');
+                      const pdfOffsetX = parseFloat(container.getAttribute('data-pdf-offset-x') || '0');
+                      const pdfOffsetY = parseFloat(container.getAttribute('data-pdf-offset-y') || '0');
+                      const pdfRotation = parseFloat(container.getAttribute('data-pdf-rotation') || '0');
+                      const pdfFilter = container.getAttribute('data-pdf-filter') || 'normal';
+
+                      let pdfFilters = "";
+                      if ("${settings.colorMode}" === "bw") {
+                        pdfFilters += "grayscale(1) contrast(1.25) ";
+                      }
+                      if (pdfFilter === "grayscale") {
+                        pdfFilters += "grayscale(1) contrast(1.1) ";
+                      } else if (pdfFilter === "sepia") {
+                        pdfFilters += "sepia(1) saturate(1.5) brightness(0.95) ";
+                      }
+                      if (!pdfFilters) pdfFilters = "none";
+
                       try {
                         const loadingTask = pdfjsLib.getDocument(url);
                         const pdf = await loadingTask.promise;
@@ -905,13 +953,13 @@ export default function DesktopView() {
 
                           let contentHtml = '';
                           if ("${settings.merchandiseType}" === "document") {
-                            contentHtml = "<div class='a4-page font-sans' style='padding: " + ${printPadding} + "px;'><div class='watermark-grid'></div><div class='image-wrapper'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * ${scaleX}) + "px, " + (${settings.offsetY} * ${scaleY}) + "px) scale(" + ${settings.scale} + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                            contentHtml = "<div class='a4-page font-sans' style='padding: " + ${printPadding} + "px;'><div class='watermark-grid'></div><div class='image-wrapper'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * ${scaleX}) + "px, " + (pdfOffsetY * ${scaleY}) + "px) scale(" + pdfScale + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
                           } else if ("${settings.merchandiseType}" === "mug") {
-                            contentHtml = "<div class='mug-preview'><div class='mug-handle'></div><div class='mug-body'><div class='cylinder'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * 0.6) + "px, " + (${settings.offsetY} * 0.625) + "px) scale(" + ${settings.scale} + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div></div>";
+                            contentHtml = "<div class='mug-preview'><div class='mug-handle'></div><div class='mug-body'><div class='cylinder'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * 0.6) + "px, " + (pdfOffsetY * 0.625) + "px) scale(" + pdfScale + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div></div>";
                           } else if ("${settings.merchandiseType}" === "tshirt") {
-                            contentHtml = "<div class='tshirt-preview'><div class='tshirt-silhouette'><svg viewBox='0 0 24 24'><path d='M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z'/></svg></div><div class='tshirt-print-area'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * 0.56875) + "px, " + (${settings.offsetY} * 0.58333) + "px) scale(" + (${settings.scale} * 0.85) + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                            contentHtml = "<div class='tshirt-preview'><div class='tshirt-silhouette'><svg viewBox='0 0 24 24'><path d='M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z'/></svg></div><div class='tshirt-print-area'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * 0.56875) + "px, " + (pdfOffsetY * 0.58333) + "px) scale(" + (pdfScale * 0.85) + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
                           } else {
-                            contentHtml = "<div class='poster-preview'><div class='poster-inner'><img src='" + imgUrl + "' style='transform: translate(" + (${settings.offsetX} * 0.983) + "px, " + (${settings.offsetY} * 0.98) + "px) scale(" + (${settings.scale} * 1.05) + ") rotate(" + ${settings.rotation} + "deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                            contentHtml = "<div class='poster-preview'><div class='poster-inner'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * 0.983) + "px, " + (pdfOffsetY * 0.98) + "px) scale(" + (pdfScale * 1.05) + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
                           }
 
                           printPage.innerHTML = contentHtml;
@@ -1108,23 +1156,25 @@ export default function DesktopView() {
     const scaleY = 1122.5 / previewHeight;
     const printPadding = 16 * scaleX;
 
-    let filters = "";
-    if (settings.colorMode === "bw") {
-      filters += "grayscale(1) contrast(1.25) ";
-    }
-    if (settings.filter === "grayscale") {
-      filters += "grayscale(1) contrast(1.1) ";
-    } else if (settings.filter === "sepia") {
-      filters += "sepia(1) saturate(1.5) brightness(0.95) ";
-    }
-    if (!filters) filters = "none";
-
     const getPrintPageHtml = (fileObj: any, index: number) => {
       let contentHtml = "";
+      const fileSettings = getFileSettings(index);
+
+      // Determine active filter CSS for this specific file
+      let fileFilters = "";
+      if (settings.colorMode === "bw") {
+        fileFilters += "grayscale(1) contrast(1.25) ";
+      }
+      if (fileSettings.filter === "grayscale") {
+        fileFilters += "grayscale(1) contrast(1.1) ";
+      } else if (fileSettings.filter === "sepia") {
+        fileFilters += "sepia(1) saturate(1.5) brightness(0.95) ";
+      }
+      if (!fileFilters) fileFilters = "none";
 
       if (fileObj.isPdf) {
         return `
-          <div class="pdf-container" data-pdf-url="${fileObj.printableUrl}">
+          <div class="pdf-container" data-pdf-url="${fileObj.printableUrl}" data-pdf-scale="${fileSettings.scale}" data-pdf-offset-x="${fileSettings.offsetX}" data-pdf-offset-y="${fileSettings.offsetY}" data-pdf-rotation="${fileSettings.rotation}" data-pdf-filter="${fileSettings.filter}">
             <div class="print-page">
               <div class="a4-page font-sans">
                 <div class="loader-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%;">
@@ -1142,7 +1192,7 @@ export default function DesktopView() {
           <div class="a4-page font-sans" style="padding: ${printPadding}px;">
             <div class="watermark-grid"></div>
             <div class="image-wrapper">
-              <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * scaleX}px, ${settings.offsetY * scaleY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+              <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * scaleX}px, ${fileSettings.offsetY * scaleY}px) scale(${fileSettings.scale}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
             </div>
           </div>
         `;
@@ -1152,7 +1202,7 @@ export default function DesktopView() {
             <div class="mug-handle"></div>
             <div class="mug-body">
               <div class="cylinder">
-                <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.6}px, ${settings.offsetY * 0.625}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+                <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * 0.6}px, ${fileSettings.offsetY * 0.625}px) scale(${fileSettings.scale}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
               </div>
             </div>
           </div>
@@ -1164,7 +1214,7 @@ export default function DesktopView() {
               <svg viewBox="0 0 24 24"><path d="M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z"/></svg>
             </div>
             <div class="tshirt-print-area">
-              <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.56875}px, ${settings.offsetY * 0.58333}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+              <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * 0.56875}px, ${fileSettings.offsetY * 0.58333}px) scale(${fileSettings.scale * 0.85}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
             </div>
           </div>
         `;
@@ -1172,7 +1222,7 @@ export default function DesktopView() {
         contentHtml = `
           <div class="poster-preview">
             <div class="poster-inner">
-              <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.983}px, ${settings.offsetY * 0.98}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+              <img src="${fileObj.printableUrl}" style="transform: translate(${fileSettings.offsetX * 0.983}px, ${fileSettings.offsetY * 0.98}px) scale(${fileSettings.scale * 1.05}) rotate(${fileSettings.rotation}deg); filter: ${fileFilters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
             </div>
           </div>
         `;
@@ -1250,6 +1300,7 @@ export default function DesktopView() {
               page-break-after: avoid !important;
               break-after: avoid !important;
             }
+            /* A4 Document styles */
             .a4-page {
               position: relative;
               width: 210mm;
@@ -1260,11 +1311,151 @@ export default function DesktopView() {
               align-items: center;
               justify-content: center;
               box-sizing: border-box;
+              box-shadow: none !important;
+              border: none !important;
             }
+            
+            /* Mug styles */
+            .mug-preview {
+              position: relative;
+              width: 320px;
+              height: 320px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .mug-handle {
+              position: absolute;
+              right: 40px;
+              width: 40px;
+              height: 120px;
+              border: 12px solid #cbd5e1;
+              border-radius: 0 40px 40px 0;
+              background: transparent;
+              z-index: 0;
+              transform: translateX(10px);
+            }
+            .mug-body {
+              width: 200px;
+              height: 240px;
+              background: #ffffff;
+              border: 6px solid #cbd5e1;
+              border-radius: 0 0 40px 40px;
+              box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              position: relative;
+              z-index: 10;
+            }
+            .cylinder {
+              width: 120px;
+              height: 150px;
+              border: 2px dashed #cbd5e1;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              background: #f8fafc;
+              position: relative;
+              border-radius: 4px;
+            }
+            
+            /* T-shirt styles */
+            .tshirt-preview {
+              position: relative;
+              width: 400px;
+              height: 400px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .tshirt-silhouette {
+              position: absolute;
+              inset: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: #e2e8f0;
+            }
+            .tshirt-silhouette svg {
+              width: 350px;
+              height: 350px;
+              fill: currentColor;
+            }
+            .tshirt-print-area {
+              position: absolute;
+              width: 130px;
+              height: 160px;
+              border: 2px dashed #3b82f6;
+              background: #f8fafc;
+              border-radius: 4px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              z-index: 10;
+              transform: translateY(-10px);
+            }
+            
+            /* Poster styles */
+            .poster-preview {
+              position: relative;
+              width: 280px;
+              height: 370px;
+              background: #0f172a;
+              border: 12px solid #020617;
+              border-radius: 6px;
+              box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+              overflow: hidden;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 10px;
+            }
+            .poster-inner {
+              position: relative;
+              width: 100%;
+              height: 100%;
+              border: 1px solid #334155;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              background: #000000;
+            }
+            
+            /* Universal preview element styles */
+            .image-wrapper {
+              position: relative;
+              width: 100%;
+              height: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+            }
+            
             img {
               max-width: 100%;
               max-height: 100%;
               object-fit: contain;
+            }
+            
+            iframe {
+              width: 100%;
+              height: 100%;
+              border: none;
+            }
+            
+            .watermark-grid {
+              position: absolute;
+              inset: 0;
+              background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+              background-size: 12px 12px;
+              opacity: 0.6;
+              pointer-events: none;
             }
             @media print {
               body, html {
@@ -1300,6 +1491,23 @@ export default function DesktopView() {
 
               for (const container of containers) {
                 const url = container.getAttribute('data-pdf-url');
+                const pdfScale = parseFloat(container.getAttribute('data-pdf-scale') || '1.0');
+                const pdfOffsetX = parseFloat(container.getAttribute('data-pdf-offset-x') || '0');
+                const pdfOffsetY = parseFloat(container.getAttribute('data-pdf-offset-y') || '0');
+                const pdfRotation = parseFloat(container.getAttribute('data-pdf-rotation') || '0');
+                const pdfFilter = container.getAttribute('data-pdf-filter') || 'normal';
+
+                let pdfFilters = "";
+                if ("${settings.colorMode}" === "bw") {
+                  pdfFilters += "grayscale(1) contrast(1.25) ";
+                }
+                if (pdfFilter === "grayscale") {
+                  pdfFilters += "grayscale(1) contrast(1.1) ";
+                } else if (pdfFilter === "sepia") {
+                  pdfFilters += "sepia(1) saturate(1.5) brightness(0.95) ";
+                }
+                if (!pdfFilters) pdfFilters = "none";
+
                 try {
                   const loadingTask = pdfjsLib.getDocument(url);
                   const pdf = await loadingTask.promise;
@@ -1325,7 +1533,19 @@ export default function DesktopView() {
 
                     const printPage = document.createElement('div');
                     printPage.className = 'print-page';
-                    printPage.innerHTML = "<div class='a4-page' style='padding: ${printPadding}px;'><img src='" + imgUrl + "' style='max-width: 100%; max-height: 100%; object-fit: contain;' /></div>";
+
+                    let contentHtml = '';
+                    if ("${settings.merchandiseType}" === "document") {
+                      contentHtml = "<div class='a4-page font-sans' style='padding: " + ${printPadding} + "px;'><div class='watermark-grid'></div><div class='image-wrapper'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * ${scaleX}) + "px, " + (pdfOffsetY * ${scaleY}) + "px) scale(" + pdfScale + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                    } else if ("${settings.merchandiseType}" === "mug") {
+                      contentHtml = "<div class='mug-preview'><div class='mug-handle'></div><div class='mug-body'><div class='cylinder'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * 0.6) + "px, " + (pdfOffsetY * 0.625) + "px) scale(" + pdfScale + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div></div>";
+                    } else if ("${settings.merchandiseType}" === "tshirt") {
+                      contentHtml = "<div class='tshirt-preview'><div class='tshirt-silhouette'><svg viewBox='0 0 24 24'><path d='M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z'/></svg></div><div class='tshirt-print-area'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * 0.56875) + "px, " + (pdfOffsetY * 0.58333) + "px) scale(" + (pdfScale * 0.85) + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                    } else {
+                      contentHtml = "<div class='poster-preview'><div class='poster-inner'><img src='" + imgUrl + "' style='transform: translate(" + (pdfOffsetX * 0.983) + "px, " + (pdfOffsetY * 0.98) + "px) scale(" + (pdfScale * 1.05) + ") rotate(" + pdfRotation + "deg); filter: " + pdfFilters + "; max-width: 100%; max-height: 100%; object-fit: contain;' /></div></div>";
+                    }
+
+                    printPage.innerHTML = contentHtml;
                     pagesFragment.appendChild(printPage);
                   }
 
@@ -1898,8 +2118,29 @@ export default function DesktopView() {
                         filename={activeFile.filename}
                         fileType={activeFile.fileType}
                         fileData={activeFile.fileData}
-                        settings={settings}
-                        onUpdateSettings={(newSettings) => setSettings(newSettings)}
+                        settings={getFileSettings(selectedFileIndex)}
+                        onUpdateSettings={(newSettings) => {
+                          setFileAdjustments((prev) => ({
+                            ...prev,
+                            [selectedFileIndex]: {
+                              scale: newSettings.scale,
+                              offsetX: newSettings.offsetX,
+                              offsetY: newSettings.offsetY,
+                              rotation: newSettings.rotation,
+                              filter: newSettings.filter,
+                            },
+                          }));
+                          setSettings((prev) => ({
+                            ...prev,
+                            colorMode: newSettings.colorMode,
+                            quality: newSettings.quality,
+                            merchandiseType: newSettings.merchandiseType,
+                            copies: newSettings.copies,
+                            doubleSided: newSettings.doubleSided,
+                            pageRangeMode: newSettings.pageRangeMode,
+                            customPages: newSettings.customPages,
+                          }));
+                        }}
                       />
                     ) : (
                       <div className="h-[400px] flex items-center justify-center text-xs text-slate-400">
