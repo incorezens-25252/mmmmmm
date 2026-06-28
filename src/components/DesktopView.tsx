@@ -215,6 +215,7 @@ export default function DesktopView() {
     offsetY: number;
     rotation: number;
     filter: "normal" | "grayscale" | "sepia";
+    copies?: number;
   }>>({});
 
   const DEFAULT_ADJUSTMENTS = {
@@ -223,6 +224,7 @@ export default function DesktopView() {
     offsetY: 0,
     rotation: 0,
     filter: "normal" as const,
+    copies: 1,
   };
 
   const getFileSettings = (idx: number): CustomizationSettings => {
@@ -234,6 +236,7 @@ export default function DesktopView() {
       offsetY: adj.offsetY,
       rotation: adj.rotation,
       filter: adj.filter,
+      copies: adj.copies || 1,
     };
   };
 
@@ -378,16 +381,17 @@ export default function DesktopView() {
     setPrintingPhase(`Spooling print payload to ${printerName} & optimizing memory overhead...`);
     await new Promise((r) => setTimeout(r, 1000));
 
-    // Phase 3: Sending pages to OS print manager
-    setPrintingPhase(`Sending ${settings.copies} ${settings.copies > 1 ? "copies" : "copy"} to physical printing queue...`);
-    await new Promise((r) => setTimeout(r, 800));
-
     // Trigger standard OS print dialog or custom high-fidelity print flow for all uploaded documents
     const filesList = session.files && session.files.length > 0
       ? session.files
       : session.file
       ? [session.file]
       : [];
+
+    // Phase 3: Sending pages to OS print manager
+    const totalCopies = filesList.reduce((sum, f, idx) => sum + (fileAdjustments[idx]?.copies || 1), 0);
+    setPrintingPhase(`Sending ${totalCopies} copies to physical printing queue... / भौतिक प्रिंटिंग कतार में भेजा जा रहा है...`);
+    await new Promise((r) => setTimeout(r, 800));
 
     if (filesList.length > 0) {
       // 1. Process all files in parallel, converting base64 data to native same-origin Blob URLs
@@ -419,8 +423,8 @@ export default function DesktopView() {
         });
       }
 
-      // If we have exactly ONE PDF and no other files, use the highly optimized direct native PDF print
-      if (processedFiles.length === 1 && processedFiles[0].isPdf) {
+      // If we have exactly ONE PDF and no other files, and copies is 1, use the highly optimized direct native PDF print
+      if (processedFiles.length === 1 && processedFiles[0].isPdf && (fileAdjustments[0]?.copies || 1) === 1) {
         const activeFileObj = processedFiles[0];
         
         // Remove existing print iframe to clean up
@@ -617,7 +621,14 @@ export default function DesktopView() {
             `;
           };
 
-          const pagesHtml = processedFiles.map((f, idx) => getPrintPageHtml(f, idx)).join("\n");
+          const pagesHtmlArray: string[] = [];
+          processedFiles.forEach((f, idx) => {
+            const numCopies = fileAdjustments[idx]?.copies || 1;
+            for (let c = 0; c < numCopies; c++) {
+              pagesHtmlArray.push(getPrintPageHtml(f, idx));
+            }
+          });
+          const pagesHtml = pagesHtmlArray.join("\n");
 
           printWindow.document.open();
           printWindow.document.write(`
@@ -1082,17 +1093,24 @@ export default function DesktopView() {
   };
 
   const estimatePrice = () => {
-    let pages = 0;
-    if (session?.files && session.files.length > 0) {
-      pages = session.files.reduce((sum, f) => sum + (f.pageCount || 1), 0);
-    } else if (session?.file) {
-      pages = session.file.pageCount || 1;
-    } else {
-      pages = 1; // fallback
-    }
-    
+    const filesList = session?.files && session.files.length > 0
+      ? session.files
+      : session?.file
+      ? [session.file]
+      : [];
+
     const rate = settings.colorMode === "color" ? 5 : 3;
-    return pages * rate * settings.copies;
+
+    if (filesList.length === 0) {
+      return 1 * rate * (fileAdjustments[0]?.copies || 1);
+    }
+
+    let totalCost = 0;
+    filesList.forEach((f, idx) => {
+      const fileCopies = fileAdjustments[idx]?.copies || 1;
+      totalCost += (f.pageCount || 1) * rate * fileCopies;
+    });
+    return totalCost;
   };
 
   const openPrintWindowInNewTab = () => {
@@ -1235,7 +1253,14 @@ export default function DesktopView() {
       `;
     };
 
-    const pagesHtml = processedFiles.map((f, idx) => getPrintPageHtml(f, idx)).join("\n");
+    const pagesHtmlArray: string[] = [];
+    processedFiles.forEach((f, idx) => {
+      const numCopies = fileAdjustments[idx]?.copies || 1;
+      for (let c = 0; c < numCopies; c++) {
+        pagesHtmlArray.push(getPrintPageHtml(f, idx));
+      }
+    });
+    const pagesHtml = pagesHtmlArray.join("\n");
 
     printTab.document.open();
     printTab.document.write(`
@@ -1841,7 +1866,16 @@ export default function DesktopView() {
                 </li>
                 <li className="flex justify-between border-b border-slate-200 pb-2">
                   <span>Copies Transferred:</span>
-                  <span className="text-slate-900 font-semibold">{settings.copies} units</span>
+                  <span className="text-slate-900 font-semibold">
+                    {(() => {
+                      const filesList = session?.files && session.files.length > 0
+                        ? session.files
+                        : session?.file
+                        ? [session.file]
+                        : [];
+                      return filesList.reduce((sum, f, idx) => sum + (fileAdjustments[idx]?.copies || 1), 0);
+                    })()} units
+                  </span>
                 </li>
                 <li className="flex justify-between">
                   <span>Cloud Storage Status:</span>
@@ -2013,6 +2047,7 @@ export default function DesktopView() {
             
             const activeFile = filesList[selectedFileIndex] || filesList[0] || session.file;
             const totalPagesCount = filesList.reduce((sum, f) => sum + (f.pageCount || 1), 0);
+            const totalPrintedPages = filesList.reduce((sum, f, idx) => sum + (f.pageCount || 1) * (fileAdjustments[idx]?.copies || 1), 0);
 
             return (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start my-2">
@@ -2044,24 +2079,62 @@ export default function DesktopView() {
                                 : "bg-slate-50/50 border-slate-100 hover:border-slate-200"
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border ${
                                 isPdf ? "bg-rose-50 border-rose-100 text-rose-500" : "bg-sky-50 border-sky-100 text-sky-500"
                               }`}>
                                 {isPdf ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <span className="block text-[11px] font-bold text-slate-700 truncate">
                                   {fileObj.filename}
                                 </span>
                                 <span className="block text-[9px] text-slate-400 font-medium">
-                                  {isPdf ? `📄 ${fileObj.pageCount || 1} Pages` : "🖼️ 1 Page"}
+                                  {isPdf ? `📄 ${fileObj.pageCount || 1} Pages` : "🖼️ 1 Page"} • <span className="font-bold text-slate-600">{fileAdjustments[idx]?.copies || 1} {(fileAdjustments[idx]?.copies || 1) > 1 ? 'copies' : 'copy'}</span>
                                 </span>
                               </div>
                             </div>
-                            {isSelected && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-600 flex-shrink-0 animate-ping" />
-                            )}
+                            <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const currentCopies = fileAdjustments[idx]?.copies || 1;
+                                  const newCopies = Math.max(1, currentCopies - 1);
+                                  setFileAdjustments((prev) => ({
+                                    ...prev,
+                                    [idx]: {
+                                      ...(prev[idx] || DEFAULT_ADJUSTMENTS),
+                                      copies: newCopies,
+                                    },
+                                  }));
+                                }}
+                                className="w-6 h-6 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-all active:scale-95"
+                                title="Decrease copies"
+                              >
+                                <Minus className="w-2.5 h-2.5" />
+                              </button>
+                              <span className="text-[10px] font-mono font-bold text-slate-800 w-4 text-center">
+                                {fileAdjustments[idx]?.copies || 1}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const currentCopies = fileAdjustments[idx]?.copies || 1;
+                                  const newCopies = currentCopies + 1;
+                                  setFileAdjustments((prev) => ({
+                                    ...prev,
+                                    [idx]: {
+                                      ...(prev[idx] || DEFAULT_ADJUSTMENTS),
+                                      copies: newCopies,
+                                    },
+                                  }));
+                                }}
+                                className="w-6 h-6 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-all active:scale-95"
+                                title="Increase copies"
+                              >
+                                <Plus className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
                           </button>
                         );
                       })}
@@ -2225,26 +2298,42 @@ export default function DesktopView() {
 
                       {/* Quantity Counter */}
                       <div className="flex items-center justify-between py-2.5 border-t border-b border-slate-100 my-1">
-                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Copies</span>
+                        <div>
+                          <span className="text-xs font-bold text-slate-700 block uppercase tracking-wider">Copies</span>
+                          <span className="text-[10px] text-slate-400 block font-semibold leading-none mt-0.5">Copies for selected item</span>
+                        </div>
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={() =>
-                              setSettings({
-                                ...settings,
-                                copies: Math.max(1, settings.copies - 1),
-                              })
-                            }
+                            onClick={() => {
+                              const currentCopies = fileAdjustments[selectedFileIndex]?.copies || 1;
+                              const newCopies = Math.max(1, currentCopies - 1);
+                              setFileAdjustments((prev) => ({
+                                ...prev,
+                                [selectedFileIndex]: {
+                                  ...(prev[selectedFileIndex] || DEFAULT_ADJUSTMENTS),
+                                  copies: newCopies,
+                                },
+                              }));
+                            }}
                             className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center justify-center transition-colors border border-slate-200/80"
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
                           <span className="text-sm font-mono font-bold text-slate-900 min-w-[20px] text-center">
-                            {String(settings.copies).padStart(2, "0")}
+                            {String(fileAdjustments[selectedFileIndex]?.copies || 1).padStart(2, "0")}
                           </span>
                           <button
-                            onClick={() =>
-                              setSettings({ ...settings, copies: settings.copies + 1 })
-                            }
+                            onClick={() => {
+                              const currentCopies = fileAdjustments[selectedFileIndex]?.copies || 1;
+                              const newCopies = currentCopies + 1;
+                              setFileAdjustments((prev) => ({
+                                ...prev,
+                                [selectedFileIndex]: {
+                                  ...(prev[selectedFileIndex] || DEFAULT_ADJUSTMENTS),
+                                  copies: newCopies,
+                                },
+                              }));
+                            }}
                             className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center justify-center transition-colors border border-slate-200/80"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -2284,7 +2373,7 @@ export default function DesktopView() {
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Estimate</p>
                           <p className="text-2xl font-black text-slate-900">₹{estimatePrice()}</p>
                           <span className="text-[9px] text-slate-400 leading-none">
-                            ({totalPagesCount} pages × {settings.colorMode === "color" ? "₹5" : "₹3"} × {settings.copies} copy)
+                            ({totalPrintedPages} printed pages × {settings.colorMode === "color" ? "₹5" : "₹3"})
                           </span>
                         </div>
                         <p className="text-[10px] text-emerald-600 font-extrabold bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-md uppercase tracking-wider">
