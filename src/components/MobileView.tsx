@@ -265,16 +265,16 @@ export default function MobileView({ sessionId }: MobileViewProps) {
             Sent Successfully!
           </h1>
           <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-            आपके <strong className="text-blue-600 font-extrabold">{totalFiles} फ़ाइलें ({totalPages} पेज)</strong> प्रिंटर सर्वर पर सुरक्षित रूप से भेज दी गई हैं।
+            Your <strong className="text-blue-600 font-extrabold">{totalFiles} files ({totalPages} pages)</strong> have been securely sent to the printer server.
           </p>
           
           <div className="bg-slate-50 rounded-2xl p-5 mb-6 border border-slate-200 text-left">
             <h2 className="text-xs font-bold text-slate-700 mb-2.5 flex items-center gap-1.5 uppercase tracking-wide">
-              <Smartphone className="w-4 h-4 text-blue-600" /> Next Actions / अगला कदम
+              <Smartphone className="w-4 h-4 text-blue-600" /> Next Actions
             </h2>
             <ol className="text-xs text-slate-600 space-y-2 list-decimal list-inside leading-relaxed font-medium">
               <li>Check your computer / desktop screen.</li>
-              <li>कंप्यूटर स्क्रीन पर अपनी फाइलों को सिलेक्ट करें।</li>
+              <li>Select your files on the computer screen.</li>
               <li>Tap <strong className="text-blue-600">Dispatch to USB Printer</strong> to print.</li>
             </ol>
           </div>
@@ -318,7 +318,7 @@ export default function MobileView({ sessionId }: MobileViewProps) {
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col">
           <div className="mb-4 text-center">
             <h2 className="text-lg font-black text-slate-800 leading-tight">
-              Transmit Documents / फ़ाइलें भेजें
+              Transmit Documents
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-semibold">
               Select multiple PDFs and Photos together to print at once.
@@ -354,15 +354,13 @@ export default function MobileView({ sessionId }: MobileViewProps) {
                 <Upload className="w-5 h-5" />
               </div>
               <span className="text-xs font-extrabold text-blue-600 uppercase tracking-wide">
-                Select PDFs or Images / फ़ाइलें चुनें
+                Select PDFs or Images
               </span>
               <span className="text-[10px] text-slate-500 mt-1 block font-medium leading-relaxed px-2">
-                Choose <strong className="text-slate-800">multiple files</strong> at once (एक साथ कई PDFs/फ़ोटो सिलेक्ट करें)
+                Choose <strong className="text-slate-800">multiple files</strong> at once.
               </span>
               <span className="text-[9px] text-slate-400 mt-2 block font-normal leading-normal">
                 💡 <strong className="text-slate-500">Tip:</strong> Press and hold a file on your phone to select multiple files!
-                <br />
-                (एक से ज़्यादा फ़ाइल चुनने के लिए पहली फ़ाइल पर थोड़ी देर दबाकर रखें)
               </span>
             </label>
           </div>
@@ -384,7 +382,7 @@ export default function MobileView({ sessionId }: MobileViewProps) {
                   htmlFor="mobile-file-picker"
                   className="text-blue-600 hover:text-blue-700 cursor-pointer flex items-center gap-1 font-black text-[9px] uppercase tracking-wider bg-blue-50 px-2 py-1 rounded-lg border border-blue-100"
                 >
-                  <Plus className="w-3 h-3" /> Add More (और जोड़ें)
+                  <Plus className="w-3 h-3" /> Add More
                 </label>
               </div>
               
@@ -432,7 +430,7 @@ export default function MobileView({ sessionId }: MobileViewProps) {
               {/* Indian Rupees Dynamic Billing Estimate Panel */}
               <div className="mt-3.5 p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl">
                 <div className="text-[9px] font-extrabold text-blue-700 uppercase tracking-widest mb-2 flex items-center gap-1">
-                  <span>💰 Dynamic Cost Estimates / बिल का अनुमान</span>
+                  <span>💰 Dynamic Cost Estimates</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center">
@@ -490,7 +488,7 @@ export default function MobileView({ sessionId }: MobileViewProps) {
           <div className="flex items-center gap-2 mb-3">
             <Smartphone className="w-4 h-4 text-blue-600" />
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-              Install as Mobile App / मोबाइल ऐप कैसे बनाएं?
+              Install as Mobile App
             </h3>
           </div>
           
@@ -500,18 +498,12 @@ export default function MobileView({ sessionId }: MobileViewProps) {
               <p>
                 Tap the three dots icon (⋮) in the top-right corner of Chrome, then select <strong className="text-blue-600">"Add to Home screen"</strong> or <strong className="text-blue-600">"Install app"</strong>.
               </p>
-              <p className="text-slate-500 mt-1 italic">
-                क्रोम के ऊपर दाईं ओर तीन डॉट्स (⋮) पर टैप करें, फिर <strong>"Add to Home screen"</strong> या <strong>"Install app"</strong> चुनें।
-              </p>
             </div>
             
             <div>
               <span className="font-bold text-slate-800 block mb-1">🍏 For iPhone/iOS (Apple Safari):</span>
               <p>
                 Tap the <strong className="text-blue-600">Share</strong> button (box with an arrow pointing up) at the bottom, scroll down, and tap <strong className="text-blue-600">"Add to Home Screen"</strong>.
-              </p>
-              <p className="text-slate-500 mt-1 italic">
-                सफारी ब्राउज़र में नीचे दिए गए <strong>Share</strong> बटन (तीर का निशान) पर टैप करें, फिर स्क्रॉल करके <strong>"Add to Home Screen"</strong> चुनें।
               </p>
             </div>
           </div>

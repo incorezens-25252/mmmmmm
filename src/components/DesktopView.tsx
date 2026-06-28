@@ -488,7 +488,7 @@ export default function DesktopView() {
                     <div class="a4-page font-sans">
                       <div class="loader-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%;">
                         <div class="loader"></div>
-                        <div style="font-size:14px; font-weight:600; color:#475569; margin-top:12px; font-family:sans-serif;">Preparing PDF Page(s)... / दस्तावेज़ तैयार किया जा रहा है...</div>
+                        <div style="font-size:14px; font-weight:600; color:#475569; margin-top:12px; font-family:sans-serif;">Preparing PDF Page(s)...</div>
                       </div>
                     </div>
                   </div>
@@ -819,7 +819,7 @@ export default function DesktopView() {
               <body>
                 <div class="container" id="loader-container">
                   <div class="loader"></div>
-                  <div class="text">Processing document page(s)... / प्रिंट के लिए दस्तावेज़ तैयार किया जा रहा है...</div>
+                  <div class="text">Processing document page(s)...</div>
                 </div>
                 <div class="print-queue-container">
                   ${pagesHtml}
@@ -1113,18 +1113,15 @@ export default function DesktopView() {
               Backend Server Required for Mobile Handshake
             </h2>
             <h3 className="text-[10px] font-bold text-amber-700 uppercase tracking-widest font-mono mb-4">
-              Netlify Static Hosting Detected / Netlify पर QR Code क्यों नहीं दिख रहा?
+              Netlify Static Hosting Detected
             </h3>
 
             <div className="space-y-4 text-xs text-slate-600 text-left leading-relaxed bg-slate-50 border border-slate-200/80 p-5 rounded-2xl mb-6">
               <p>
-                <strong>English:</strong> Netlify is a static file hosting platform. By default, it does not run the Node.js/Express backend server (<code>server.ts</code>) included in this project. Because the API server is not running, the app cannot generate a secure session ID or load the QR code for mobile file transfers.
-              </p>
-              <p className="border-t border-slate-200 pt-3">
-                <strong>हिंदी (Hindi):</strong> Netlify डिफ़ॉल्ट रूप से केवल स्टेटिक फाइलें (HTML, CSS, JS) होस्ट करता है। यह इस प्रोजेक्ट के Node.js/Express बैकएंड सर्वर को रन नहीं करता है। बैकएंड सर्वर बंद होने के कारण, QR कोड के लिए सेशन ID जनरेट नहीं हो पा रही है और QR कोड लोड नहीं हो रहा है।
+                Netlify is a static file hosting platform. By default, it does not run the Node.js/Express backend server (<code>server.ts</code>) included in this project. Because the API server is not running, the app cannot generate a secure session ID or load the QR code for mobile file transfers.
               </p>
               <p className="border-t border-slate-200 pt-3 text-[11px] text-slate-500 font-mono italic">
-                💡 <strong>Solution:</strong> आप इसे Render, Railway, Vercel, या Heroku जैसी फुल-स्टैक सर्विस पर डिप्लॉय कर सकते हैं जहाँ Node.js सर्वर बैकएंड चालू रहे।
+                💡 <strong>Solution:</strong> You can deploy it on full-stack services like Render, Railway, Vercel, or Heroku where the Node.js backend server remains active.
               </p>
             </div>
 
@@ -1273,27 +1270,7 @@ export default function DesktopView() {
                 ))}
               </div>
 
-              {/* SIMULATOR TRAP FOR SCREENSHOTS & VIRTUAL ENVIRONMENT */}
-              <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-xl">
-                <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wide mb-2">
-                  <HardDriveUpload className="w-4 h-4 text-blue-600" /> Virtual Desktop Sandbox Upload
-                </h4>
-                <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-                  No smartphone nearby? You can directly simulate the mobile cloud upload using this dropzone right on your desktop:
-                </p>
-                <div className="relative border border-dashed border-slate-300 hover:border-blue-400 bg-slate-50 hover:bg-blue-50/20 rounded-xl p-3.5 text-center transition-all">
-                  <input
-                    type="file"
-                    id="sandbox-file-picker"
-                    accept="image/*,application/pdf"
-                    onChange={handleLocalSimulatorUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <div className="flex items-center justify-center gap-2 text-xs font-medium text-slate-600">
-                    <span className="text-blue-600 font-bold underline">Click to upload mock file</span> or drag & drop here
-                  </div>
-                </div>
-              </div>
+              {/* SIMULATOR TRAP FOR SCREENSHOTS & VIRTUAL ENVIRONMENT REMOVED */}
             </div>
 
             {/* Right side connection terminal (5 columns) */}
@@ -1531,7 +1508,7 @@ export default function DesktopView() {
                       {/* Print Medium Locked to A4 */}
                       <div className="space-y-2 bg-slate-50 border border-slate-200/50 p-3.5 rounded-2xl">
                         <label className="text-[9px] font-extrabold text-slate-400 block uppercase tracking-wider leading-none">
-                          Paper Selection / पेपर साइज़
+                          Paper Selection
                         </label>
                         <div className="flex items-center gap-3 mt-1">
                           <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm">
@@ -1547,7 +1524,7 @@ export default function DesktopView() {
                       {/* Print Color Mode */}
                       <div className="space-y-2">
                         <label className="text-[9px] font-extrabold text-slate-400 block uppercase tracking-wider leading-none">
-                          Print Color Mode / प्रिंट का रंग
+                          Print Color Mode
                         </label>
                         <div className="grid grid-cols-2 gap-2 mt-1">
                           <button
@@ -1583,7 +1560,7 @@ export default function DesktopView() {
 
                       {/* Quantity Counter */}
                       <div className="flex items-center justify-between py-2.5 border-t border-b border-slate-100 my-1">
-                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Copies / प्रतियां</span>
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Copies</span>
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() =>
