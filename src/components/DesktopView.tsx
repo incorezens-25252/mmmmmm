@@ -2293,39 +2293,13 @@ export default function DesktopView() {
                       </div>
 
                       <div className="space-y-2.5">
-                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                            <span className="w-4 h-4 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-[9px]">1</span>
-                            Recommended Printing Path
-                          </div>
-                          <p className="text-[10.5px] text-slate-500 mb-2 leading-relaxed">
-                            Bypass iframe sandbox restrictions. Opens document in a new tab for 100% reliable system print.
-                          </p>
-                          <button
-                            onClick={openPrintWindowInNewTab}
-                            className="w-full py-3 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-extrabold tracking-wider text-xs uppercase flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
-                          >
-                            <Printer className="w-4 h-4" />
-                            Print via Browser (New Tab)
-                          </button>
-                        </div>
-
-                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                            <span className="w-4 h-4 rounded bg-slate-200 text-slate-700 flex items-center justify-center text-[9px]">2</span>
-                            Direct USB Release Simulation
-                          </div>
-                          <p className="text-[10.5px] text-slate-500 mb-2 leading-relaxed">
-                            Releases payload directly to the paired WebUSB physical printer device.
-                          </p>
-                          <button
-                            onClick={() => triggerPrintRelease(false)}
-                            className="w-full py-2.5 px-4 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold tracking-wider text-xs uppercase flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
-                          >
-                            <Usb className="w-3.5 h-3.5 text-slate-600" />
-                            DISPATCH TO USB PRINTER
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => triggerPrintRelease(false)}
+                          className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black tracking-wider text-xs uppercase flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
+                        >
+                          <Printer className="w-4 h-4" />
+                          Print Document (Direct USB)
+                        </button>
                       </div>
 
                       <div className="mt-3.5 flex items-center justify-center gap-1.5 text-[9px] text-rose-500 font-mono text-center font-semibold uppercase tracking-wider bg-rose-50/50 p-2 rounded-lg border border-rose-100">
