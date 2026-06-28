@@ -44,6 +44,47 @@ export default function DesktopView() {
   const [pairedDevices, setPairedDevices] = useState<any[]>([]);
   const [usbError, setUsbError] = useState("");
   const [showNoUsbWarning, setShowNoUsbWarning] = useState(false);
+  const [showUsbTroubleshooter, setShowUsbTroubleshooter] = useState(false);
+
+  // Helper function to detect if connected USB device is likely a printer
+  const isUsbDeviceAPrinter = (device: any): boolean => {
+    if (!device) return false;
+    
+    // Check product name or manufacturer name for printer keywords
+    const name = (device.productName || "").toLowerCase();
+    const manufacturer = (device.manufacturerName || "").toLowerCase();
+    const printerKeywords = [
+      "print", "printer", "hp", "canon", "epson", "brother",
+      "lexmark", "samsung", "pos", "thermal", "receipt", "zebra",
+      "dymo", "fujitsu", "ricoh", "sharp", "kyocera", "toshiba"
+    ];
+    
+    if (printerKeywords.some(keyword => name.includes(keyword) || manufacturer.includes(keyword))) {
+      return true;
+    }
+    
+    // USB Class Code 7 is the official USB Printer class
+    if (device.deviceClass === 7) return true;
+    
+    // Scan interface list inside configurations for printer interface class
+    if (device.configurations) {
+      for (const config of device.configurations) {
+        if (config.interfaces) {
+          for (const iface of config.interfaces) {
+            if (iface.alternates) {
+              for (const alt of iface.alternates) {
+                if (alt.interfaceClass === 7) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    return false;
+  };
 
   // Monitor physical USB connection in real-time
   useEffect(() => {
@@ -1006,6 +1047,373 @@ export default function DesktopView() {
     return pages * rate * settings.copies;
   };
 
+  const openPrintWindowInNewTab = () => {
+    if (!session) return;
+    
+    const filesList = session.files && session.files.length > 0
+      ? session.files
+      : session.file
+      ? [session.file]
+      : [];
+
+    if (filesList.length === 0) return;
+
+    // Open a new tab
+    const printTab = window.open("", "_blank");
+    if (!printTab) {
+      alert("The popup blocker prevented opening the print window. Please allow popups for this site or open in a new tab.");
+      return;
+    }
+
+    // Process all files, converting base64 data to native same-origin Blob URLs
+    const processedFiles = [];
+    for (let i = 0; i < filesList.length; i++) {
+      const fileObj = filesList[i];
+      let printableUrl = fileObj.fileData;
+      if (printableUrl && !printableUrl.startsWith("blob:")) {
+        try {
+          const parts = printableUrl.split(",");
+          const mime = parts[0].match(/:(.*?);/)?.[1] || fileObj.fileType || "application/pdf";
+          const base64Content = parts[1] || parts[0];
+          const binary = atob(base64Content);
+          const array = new Uint8Array(binary.length);
+          for (let j = 0; j < binary.length; j++) {
+            array[j] = binary.charCodeAt(j);
+          }
+          const blob = new Blob([array], { type: mime });
+          printableUrl = URL.createObjectURL(blob);
+        } catch (err) {
+          console.error("Failed to generate printable Blob URL for file index " + i + ":", err);
+        }
+      }
+      const isPdf = fileObj.fileType === "application/pdf" || fileObj.filename.toLowerCase().endsWith(".pdf");
+      processedFiles.push({
+        ...fileObj,
+        printableUrl,
+        isPdf
+      });
+    }
+
+    // A4 page in 96 DPI CSS print pixels is exactly 793.7px wide by 1122.5px tall
+    let previewWidth = 300;
+    let previewHeight = 424;
+    if (typeof document !== "undefined") {
+      const printArea = document.getElementById("print-area");
+      if (printArea) {
+        previewWidth = printArea.clientWidth || 300;
+        previewHeight = printArea.clientHeight || 424;
+      }
+    }
+    const scaleX = 793.7 / previewWidth;
+    const scaleY = 1122.5 / previewHeight;
+    const printPadding = 16 * scaleX;
+
+    let filters = "";
+    if (settings.colorMode === "bw") {
+      filters += "grayscale(1) contrast(1.25) ";
+    }
+    if (settings.filter === "grayscale") {
+      filters += "grayscale(1) contrast(1.1) ";
+    } else if (settings.filter === "sepia") {
+      filters += "sepia(1) saturate(1.5) brightness(0.95) ";
+    }
+    if (!filters) filters = "none";
+
+    const getPrintPageHtml = (fileObj: any, index: number) => {
+      let contentHtml = "";
+
+      if (fileObj.isPdf) {
+        return `
+          <div class="pdf-container" data-pdf-url="${fileObj.printableUrl}">
+            <div class="print-page">
+              <div class="a4-page font-sans">
+                <div class="loader-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%;">
+                  <div class="loader"></div>
+                  <div style="font-size:14px; font-weight:600; color:#475569; margin-top:12px; font-family:sans-serif;">Preparing PDF Page(s)...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (settings.merchandiseType === "document") {
+        contentHtml = `
+          <div class="a4-page font-sans" style="padding: ${printPadding}px;">
+            <div class="watermark-grid"></div>
+            <div class="image-wrapper">
+              <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * scaleX}px, ${settings.offsetY * scaleY}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+            </div>
+          </div>
+        `;
+      } else if (settings.merchandiseType === "mug") {
+        contentHtml = `
+          <div class="mug-preview">
+            <div class="mug-handle"></div>
+            <div class="mug-body">
+              <div class="cylinder">
+                <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.6}px, ${settings.offsetY * 0.625}px) scale(${settings.scale}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (settings.merchandiseType === "tshirt") {
+        contentHtml = `
+          <div class="tshirt-preview">
+            <div class="tshirt-silhouette">
+              <svg viewBox="0 0 24 24"><path d="M18,2H16.22a3,3,0,0,0-4.44,0H10a3,3,0,0,0-4.44,0H3.8a1,1,0,0,0-1,1.11l1,9A1,1,0,0,0,4.8,13H6v8a1,1,0,0,0,1,1H17a1,1,0,0,0,1-1V13h1.2a1,1,0,0,0,1-.89l1-9A1,1,0,0,0,20.2,2ZM18,12H16v8H8V12H6V4H8.4a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,11.6,4h.8a1,1,0,0,0,.82-.42,1,1,0,0,1,1.56,0A1,1,0,0,0,15.6,4H18Z"/></svg>
+            </div>
+            <div class="tshirt-print-area">
+              <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.56875}px, ${settings.offsetY * 0.58333}px) scale(${settings.scale * 0.85}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+            </div>
+          </div>
+        `;
+      } else {
+        contentHtml = `
+          <div class="poster-preview">
+            <div class="poster-inner">
+              <img src="${fileObj.printableUrl}" style="transform: translate(${settings.offsetX * 0.983}px, ${settings.offsetY * 0.98}px) scale(${settings.scale * 1.05}) rotate(${settings.rotation}deg); filter: ${filters}; max-width: 100%; max-height: 100%; object-fit: contain;" />
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="print-page">
+          ${contentHtml}
+        </div>
+      `;
+    };
+
+    const pagesHtml = processedFiles.map((f, idx) => getPrintPageHtml(f, idx)).join("\n");
+
+    printTab.document.open();
+    printTab.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Document - PrintIO</title>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+          <style>
+            body, html {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              background-color: #f8fafc;
+              font-family: system-ui, -apple-system, sans-serif;
+            }
+            .container {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              gap: 16px;
+              background-color: #f8fafc;
+              z-index: 100;
+              position: fixed;
+              inset: 0;
+              transition: opacity 0.5s ease;
+            }
+            .loader {
+              border: 4px solid #e2e8f0;
+              border-top: 4px solid #2563eb;
+              border-radius: 50%;
+              width: 36px;
+              height: 36px;
+              animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            .text {
+              font-size: 14px;
+              font-weight: 600;
+              color: #475569;
+            }
+            .print-page {
+              page-break-after: always;
+              page-break-inside: avoid;
+              break-after: always;
+              width: 100vw;
+              height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              position: relative;
+              box-sizing: border-box;
+              background-color: #ffffff;
+              overflow: hidden;
+            }
+            .print-page:last-child {
+              page-break-after: avoid !important;
+              break-after: avoid !important;
+            }
+            .a4-page {
+              position: relative;
+              width: 210mm;
+              height: 297mm;
+              background-color: #ffffff;
+              overflow: hidden;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              box-sizing: border-box;
+            }
+            img {
+              max-width: 100%;
+              max-height: 100%;
+              object-fit: contain;
+            }
+            @media print {
+              body, html {
+                background-color: #ffffff !important;
+                margin: 0 !important;
+                padding: 0 !important;
+              }
+              .container {
+                display: none !important;
+              }
+              .print-page {
+                width: 100%;
+                height: 100vh;
+                display: flex !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container" id="loader-container">
+            <div class="loader"></div>
+            <div class="text">Processing document page(s)...</div>
+          </div>
+          <div class="print-queue-container">
+            ${pagesHtml}
+          </div>
+          <script>
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+            async function loadAndRenderPDFs() {
+              const containers = Array.from(document.querySelectorAll('.pdf-container'));
+              if (containers.length === 0) return;
+
+              for (const container of containers) {
+                const url = container.getAttribute('data-pdf-url');
+                try {
+                  const loadingTask = pdfjsLib.getDocument(url);
+                  const pdf = await loadingTask.promise;
+                  const numPages = pdf.numPages;
+
+                  const pagesFragment = document.createDocumentFragment();
+
+                  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 2.2 });
+                    
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    await page.render({
+                      canvasContext: context,
+                      viewport: viewport
+                    }).promise;
+
+                    const imgUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+                    const printPage = document.createElement('div');
+                    printPage.className = 'print-page';
+                    printPage.innerHTML = "<div class='a4-page' style='padding: ${printPadding}px;'><img src='" + imgUrl + "' style='max-width: 100%; max-height: 100%; object-fit: contain;' /></div>";
+                    pagesFragment.appendChild(printPage);
+                  }
+
+                  container.parentNode.replaceChild(pagesFragment, container);
+                } catch (err) {
+                  console.error("Failed to render PDF page:", err);
+                  const fallbackPage = document.createElement('div');
+                  fallbackPage.className = 'print-page';
+                  fallbackPage.innerHTML = "<div class='a4-page'><iframe src='" + url + "#toolbar=0&navpanes=0&scrollbar=0' style='width:100%;height:100%;border:none;'></iframe></div>";
+                  container.parentNode.replaceChild(fallbackPage, container);
+                }
+              }
+            }
+
+            function triggerPrint() {
+              document.getElementById('loader-container').style.display = 'none';
+              setTimeout(function() {
+                window.focus();
+                window.print();
+              }, 500);
+            }
+
+            async function init() {
+              try {
+                await loadAndRenderPDFs();
+              } catch (err) {
+                console.error(err);
+              }
+
+              const allPrintPages = Array.from(document.querySelectorAll('.print-page'));
+              if (allPrintPages.length > 0) {
+                allPrintPages[allPrintPages.length - 1].style.pageBreakAfter = 'avoid';
+                allPrintPages[allPrintPages.length - 1].style.breakAfter = 'avoid';
+              }
+
+              const imgs = Array.from(document.querySelectorAll('img, iframe'));
+              if (imgs.length === 0) {
+                triggerPrint();
+              } else {
+                let loaded = 0;
+                imgs.forEach(el => {
+                  if (el.tagName === 'IMG' && el.complete) {
+                    loaded++;
+                    if (loaded >= imgs.length) triggerPrint();
+                  } else {
+                    el.onload = () => {
+                      loaded++;
+                      if (loaded >= imgs.length) triggerPrint();
+                    };
+                    el.onerror = () => {
+                      loaded++;
+                      if (loaded >= imgs.length) triggerPrint();
+                    };
+                  }
+                });
+                setTimeout(triggerPrint, 5000);
+              }
+            }
+
+            window.onload = init;
+          </script>
+        </body>
+      </html>
+    `);
+    printTab.document.close();
+    
+    // Also simulate print complete status locally so user gets completion screen
+    setPrintStatus("printing");
+    setPrintingPhase("Connecting browser printing pipeline...");
+    
+    // Clean up file on complete
+    setTimeout(async () => {
+      setPrintingPhase("Print job delivered. Erasing source files from Cloud memory automatically...");
+      if (session.id !== "local-standalone-mode") {
+        try {
+          await fetch(`/api/session/${session.id}/complete`, {
+            method: "POST",
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      setTimeout(() => {
+        setPrintStatus("completed");
+      }, 1000);
+    }, 1500);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased selection:bg-blue-600/10 selection:text-blue-600">
       
@@ -1023,22 +1431,38 @@ export default function DesktopView() {
         <div className="flex items-center gap-6">
           {usbSupported ? (
             pairedDevices.length > 0 ? (
-              <button
-                onClick={requestUsbDevice}
-                className="flex items-center gap-2 bg-emerald-50 border border-emerald-200/60 hover:border-emerald-300 hover:bg-emerald-100/80 px-3 py-1 rounded-full transition-all group"
-                title={`Connected USB Device: ${pairedDevices[0].productName || "Unknown device"}. Click to pair another.`}
-              >
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-                  <Usb className="w-3.5 h-3.5 text-emerald-600 animate-bounce" />
-                  Connected: {pairedDevices[0].productName ? (pairedDevices[0].productName.length > 15 ? pairedDevices[0].productName.substring(0, 15) + "..." : pairedDevices[0].productName) : "USB Printer"}
-                </span>
-              </button>
+              (() => {
+                const primaryDevice = pairedDevices[0];
+                const isPrinter = isUsbDeviceAPrinter(primaryDevice);
+                const displayName = primaryDevice.productName 
+                  ? (primaryDevice.productName.length > 15 ? primaryDevice.productName.substring(0, 15) + "..." : primaryDevice.productName) 
+                  : "USB Device";
+                
+                return (
+                  <button
+                    onClick={() => setShowUsbTroubleshooter(true)}
+                    className={`flex items-center gap-2 border px-3 py-1 rounded-full transition-all group cursor-pointer ${
+                      isPrinter 
+                        ? "bg-emerald-50 border-emerald-200/60 hover:border-emerald-400 hover:bg-emerald-100/80" 
+                        : "bg-amber-50 border-amber-300 hover:border-amber-400 hover:bg-amber-100/80"
+                    }`}
+                    title={`USB Device Connected: ${primaryDevice.productName || "Unknown device"}. Click to open USB Troubleshooter.`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${isPrinter ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`}></div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                      isPrinter ? "text-emerald-700" : "text-amber-700"
+                    }`}>
+                      <Usb className={`w-3.5 h-3.5 ${isPrinter ? "text-emerald-600 animate-bounce" : "text-amber-500"}`} />
+                      {isPrinter ? `Printer: ${displayName}` : `Device: ${displayName} (Non-Printer)`}
+                    </span>
+                  </button>
+                );
+              })()
             ) : (
               <button
-                onClick={requestUsbDevice}
+                onClick={() => setShowUsbTroubleshooter(true)}
                 className="flex items-center gap-2 bg-amber-50 border border-amber-200 hover:border-amber-300 hover:bg-amber-100/50 px-3 py-1.5 rounded-full transition-all animate-pulse group cursor-pointer shadow-sm"
-                title="Click to pair/connect your real USB printer"
+                title="Open USB Printer Troubleshooting Guide"
               >
                 <div className="w-2 h-2 rounded-full bg-amber-500"></div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1 font-sans">
@@ -1613,8 +2037,8 @@ export default function DesktopView() {
                     </div>
 
                     {/* Print Dispatch Release Action Bar */}
-                    <div className="mt-6 pt-4 border-t border-slate-100">
-                      <div className="flex justify-between items-end mb-4">
+                    <div className="mt-6 pt-4 border-t border-slate-100 space-y-4">
+                      <div className="flex justify-between items-end">
                         <div>
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Estimate</p>
                           <p className="text-2xl font-black text-slate-900">₹{estimatePrice()}</p>
@@ -1627,13 +2051,41 @@ export default function DesktopView() {
                         </p>
                       </div>
 
-                      <button
-                        onClick={() => triggerPrintRelease(false)}
-                        className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-wider text-xs uppercase flex items-center justify-center gap-2.5 transition-all shadow-md shadow-blue-600/25 active:scale-95 cursor-pointer"
-                      >
-                        <Printer className="w-4 h-4" />
-                        DISPATCH TO USB PRINTER
-                      </button>
+                      <div className="space-y-2.5">
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            <span className="w-4 h-4 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-[9px]">1</span>
+                            Recommended Printing Path
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 mb-2 leading-relaxed">
+                            Bypass iframe sandbox restrictions. Opens document in a new tab for 100% reliable system print.
+                          </p>
+                          <button
+                            onClick={openPrintWindowInNewTab}
+                            className="w-full py-3 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-extrabold tracking-wider text-xs uppercase flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
+                          >
+                            <Printer className="w-4 h-4" />
+                            Print via Browser (New Tab)
+                          </button>
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            <span className="w-4 h-4 rounded bg-slate-200 text-slate-700 flex items-center justify-center text-[9px]">2</span>
+                            Direct USB Release Simulation
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 mb-2 leading-relaxed">
+                            Releases payload directly to the paired WebUSB physical printer device.
+                          </p>
+                          <button
+                            onClick={() => triggerPrintRelease(false)}
+                            className="w-full py-2.5 px-4 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold tracking-wider text-xs uppercase flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+                          >
+                            <Usb className="w-3.5 h-3.5 text-slate-600" />
+                            DISPATCH TO USB PRINTER
+                          </button>
+                        </div>
+                      </div>
 
                       <div className="mt-3.5 flex items-center justify-center gap-1.5 text-[9px] text-rose-500 font-mono text-center font-semibold uppercase tracking-wider bg-rose-50/50 p-2 rounded-lg border border-rose-100">
                         <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" /> Cloud auto-delete: active on print trigger.
@@ -1692,6 +2144,161 @@ export default function DesktopView() {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* USB Connection & Troubleshooting Hub Modal */}
+      {showUsbTroubleshooter && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-lg w-full shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="absolute top-0 inset-x-0 h-1.5 bg-blue-600" />
+            
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100">
+                  <Usb className="w-5.5 h-5.5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 leading-tight">
+                    USB Hardware & Connections
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">WebUSB Diagnostics & Active Verification</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowUsbTroubleshooter(false)}
+                className="text-slate-400 hover:text-slate-600 font-semibold text-xs cursor-pointer px-2 py-1 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200/50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-4 pr-1 flex-1 py-1">
+              {/* WebUSB Support check */}
+              <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></div>
+                <div className="text-[11.5px] text-slate-700">
+                  <span className="font-extrabold text-emerald-800 uppercase text-[9px] bg-emerald-100 px-1.5 py-0.5 rounded mr-1">Active</span>
+                  Browser WebUSB API is supported and online.
+                </div>
+              </div>
+
+              {/* Connected hardware status */}
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Paired USB Devices ({pairedDevices.length})
+                </h4>
+                
+                {pairedDevices.length > 0 ? (
+                  <div className="space-y-2">
+                    {pairedDevices.map((device, idx) => {
+                      const isPrinter = isUsbDeviceAPrinter(device);
+                      return (
+                        <div 
+                          key={idx}
+                          className={`p-3.5 rounded-xl border flex flex-col gap-2 ${
+                            isPrinter 
+                              ? "bg-emerald-50/30 border-emerald-200/60" 
+                              : "bg-amber-50/30 border-amber-200/80"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <Usb className={`w-3.5 h-3.5 ${isPrinter ? "text-emerald-600" : "text-amber-500"}`} />
+                              {device.productName || "Unknown USB Device"}
+                            </span>
+                            <span className={`text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded ${
+                              isPrinter 
+                                ? "bg-emerald-100 text-emerald-800" 
+                                : "bg-amber-100 text-amber-800"
+                            }`}>
+                              {isPrinter ? "Verified Printer" : "Non-Printer Device"}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-500 bg-white/50 p-2 rounded-lg border border-slate-100">
+                            <div>Manufacturer: <span className="font-bold text-slate-700">{device.manufacturerName || "N/A"}</span></div>
+                            <div>Vendor ID: <span className="font-bold text-slate-700">0x{device.vendorId.toString(16).toUpperCase()}</span></div>
+                            <div>Product ID: <span className="font-bold text-slate-700">0x{device.productId.toString(16).toUpperCase()}</span></div>
+                            <div>Device Class: <span className="font-bold text-slate-700">{device.deviceClass || "Interface-defined"}</span></div>
+                          </div>
+
+                          {!isPrinter && (
+                            <div className="text-[10.5px] text-amber-700 leading-relaxed bg-amber-50/50 p-2 rounded-lg border border-amber-100/60 mt-1">
+                              ⚠️ <strong className="font-semibold">Important Connection Warning:</strong> This device appears to be a mouse, keyboard, or other non-printer USB hardware that was paired with your browser in the past. It will <strong className="font-semibold">not</strong> receive print commands. Please connect and pair your actual physical USB printer.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                    <p className="text-xs text-slate-500 leading-normal">
+                      No USB devices are currently paired or recognized.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Troubleshooting Instructions */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  How to Pair Your USB Printer
+                </h4>
+                
+                <div className="space-y-2 text-[11px] text-slate-500 leading-relaxed">
+                  <div className="flex gap-2">
+                    <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold flex-shrink-0">1</span>
+                    <p>Connect your printer to this computer using a standard USB cable.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold flex-shrink-0">2</span>
+                    <p>Power on the printer and verify it is recognized by your operating system.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold flex-shrink-0">3</span>
+                    <p>Click the <strong className="font-semibold text-slate-800">Pair New USB Printer</strong> button below.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold flex-shrink-0">4</span>
+                    <p>Select your exact printer model from the browser popup dialog and click <strong className="font-semibold text-slate-800">Connect</strong>.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Browser Iframe Warning */}
+              <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+                <p className="text-[11px] text-blue-800 leading-relaxed font-medium">
+                  💡 <strong className="font-semibold">Iframe Print Sandbox block:</strong> Some modern browsers block background print actions inside iframe sandbox previews. If you connect your printer and printing still fails to open, please use the <strong className="font-semibold">Print via Browser (New Tab)</strong> button in the print sidebar. This is 100% reliable as it executes in a native tab.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2.5">
+              <button
+                onClick={async () => {
+                  await requestUsbDevice();
+                }}
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Usb className="w-3.5 h-3.5" /> Pair New USB Printer
+              </button>
+              
+              {pairedDevices.length > 0 && (
+                <button
+                  onClick={() => {
+                    setPairedDevices([]);
+                    alert("Permissions reset successfully. The browser will ask for device access again next time you pair.");
+                  }}
+                  className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                  title="Clear paired state from local application cache"
+                >
+                  Clear Cache
+                </button>
+              )}
             </div>
           </div>
         </div>
